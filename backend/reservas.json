@@ -6,5 +6,83 @@
     "equipo": "kevin 20 ipads",
     "usuario": "c",
     "estado": "pendiente"
+  },
+  {
+    "id": 1780344550505,
+    "creadoEn": "2026-06-01T20:09:10.505Z",
+    "fecha": "2026-06-01",
+    "hour": "07:15-08:00",
+    "equipo": "30 iPads · 1101",
+    "usuario": "Kevin Torres",
+    "curso": "1101",
+    "cantidad": 30,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "nota": "Prueba de correo",
+    "estado": "rechazado"
+  },
+  {
+    "id": 1780345051320,
+    "creadoEn": "2026-06-01T20:17:31.320Z",
+    "fecha": "2026-06-01",
+    "hour": "07:15-08:00",
+    "equipo": "10 iPads · 1005",
+    "usuario": "Kevin Leo Torres",
+    "curso": "1005",
+    "cantidad": 10,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "nota": "Prueba correo 2",
+    "estado": "rechazado"
+  },
+  {
+    "id": 1780345981526,
+    "creadoEn": "2026-06-01T20:33:01.526Z",
+    "fecha": "2026-06-01",
+    "hour": "08:00-08:45",
+    "equipo": "10 iPads · 1002",
+    "usuario": "Daniel Tuzzo",
+    "curso": "1002",
+    "cantidad": 10,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "nota": "Prueba 3",
+    "estado": "rechazado"
+  },
+  {
+    "id": 1780345983537,
+    "creadoEn": "2026-06-01T20:33:03.537Z",
+    "fecha": "2026-06-01",
+    "hour": "08:00-08:45",
+    "equipo": "10 iPads · 1002",
+    "usuario": "Daniel Tuzzo",
+    "curso": "1002",
+    "cantidad": 10,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "nota": "Prueba 3",
+    "estado": "rechazado"
+  },
+  {
+    "id": 1780348645047,
+    "creadoEn": "2026-06-01T21:17:25.047Z",
+    "fecha": "2026-06-01",
+    "hour": "08:45-09:30",
+    "equipo": "1 iPads · 303",
+    "usuario": "José David Mora",
+    "curso": "303",
+    "cantidad": 1,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "nota": "Prueba 4",
+    "estado": "rechazado"
+  },
+  {
+    "id": 1780348646670,
+    "creadoEn": "2026-06-01T21:17:26.670Z",
+    "fecha": "2026-06-01",
+    "hour": "08:45-09:30",
+    "equipo": "1 iPads · 303",
+    "usuario": "José David Mora",
+    "curso": "303",
+    "cantidad": 1,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "nota": "Prueba 4",
+    "estado": "rechazado"
   }
 ]

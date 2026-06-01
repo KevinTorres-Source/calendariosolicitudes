@@ -4,6 +4,30 @@ const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 
+function cargarEnvLocal() {
+  const envPath = path.join(__dirname, ".env");
+  if (!fs.existsSync(envPath)) return;
+
+  const lineas = fs.readFileSync(envPath, "utf-8").split(/\r?\n/);
+  lineas.forEach(linea => {
+    const limpia = linea.trim();
+    if (!limpia || limpia.startsWith("#")) return;
+
+    const separador = limpia.indexOf("=");
+    if (separador === -1) return;
+
+    const key = limpia.slice(0, separador).trim();
+    let value = limpia.slice(separador + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+
+    if (key && process.env[key] === undefined) process.env[key] = value;
+  });
+}
+
+cargarEnvLocal();
+
 const app = express();
 const PORT = 3000;
 const MAX_DISPOSITIVOS_POR_DIA = parseInt(process.env.MAX_DISPOSITIVOS_POR_DIA || "70", 10);
@@ -164,6 +188,27 @@ function estaEnVentanaReservaProfesor(fecha) {
   return fechaISO(objetivo) === fecha && objetivo >= inicio && objetivo <= fin;
 }
 
+function escaparHTML(texto) {
+  return String(texto || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatearFechaCorreo(fecha) {
+  const [year, month, day] = String(fecha || "").split("-").map(Number);
+  if (!year || !month || !day) return fecha || "Sin fecha";
+
+  return new Date(year, month - 1, day).toLocaleDateString("es-CO", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+}
+
 async function enviarCorreoReserva(reserva) {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     return { enviado: false, razon: "SMTP no configurado" };
@@ -186,32 +231,102 @@ async function enviarCorreoReserva(reserva) {
     }
   });
 
+  const fechaTexto = formatearFechaCorreo(reserva.fecha);
+  const esRechazada = reserva.estado === "rechazado";
+  const estadoTexto = esRechazada ? "Rechazada" : "Aprobada";
+  const tituloCorreo = esRechazada ? "Solicitud de iPads rechazada" : "Solicitud de iPads confirmada";
+  const mensajePrincipal = esRechazada
+    ? "Su solicitud de prestamo de iPads fue rechazada."
+    : "Su solicitud de prestamo de iPads quedo registrada y aprobada.";
+  const saludoEstado = esRechazada
+    ? "tu solicitud fue rechazada."
+    : "tu solicitud quedo registrada y aprobada.";
+  const colorEstado = esRechazada ? "#b42318" : "#16803c";
   const texto = [
-    "Su solicitud de prestamo de iPads quedo registrada.",
+    mensajePrincipal,
     "",
     `Nombre: ${reserva.usuario}`,
-    `Correo: ${reserva.correo}`,
-    `Fecha: ${reserva.fecha}`,
+    `Fecha: ${fechaTexto}`,
     `Hora: ${reserva.hour}`,
     `Curso / Grado: ${reserva.curso}`,
     `Cantidad de iPads: ${reserva.cantidad}`,
     `Informacion adicional: ${reserva.nota || "N/A"}`,
-    `Estado: ${reserva.estado}`
+    `Estado: ${estadoTexto}`,
+    "",
+    "Gracias por usar el calendario de solicitudes del Colegio Americano de Bogotá Bilingüe."
   ].join("\n");
 
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  const html = `
+    <div style="margin:0;padding:24px;background:#f3f6fa;font-family:Arial,sans-serif;color:#1f2937;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:620px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr>
+          <td style="background:#1C4169;padding:22px 26px;">
+            <h1 style="margin:0;color:#ffffff;font-size:22px;line-height:1.25;">${tituloCorreo}</h1>
+            <p style="margin:6px 0 0;color:#F08C28;font-weight:700;">Colegio Americano de Bogotá Bilingüe</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 26px;">
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.5;">
+              Hola ${escaparHTML(reserva.usuario)}, ${saludoEstado}
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px;">
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Nombre</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.usuario)}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Fecha</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(fechaTexto)}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Hora</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.hour)}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Curso / Grado</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.curso || "N/A")}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Cantidad de iPads</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.cantidad)}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Estado</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:800;color:${colorEstado};">${escaparHTML(estadoTexto)}</td>
+              </tr>
+            </table>
+            <div style="margin-top:18px;padding:14px 16px;background:#f8fafc;border-left:4px solid #F08C28;border-radius:8px;">
+              <strong style="display:block;margin-bottom:6px;color:#1C4169;">Informacion adicional</strong>
+              <p style="margin:0;line-height:1.5;">${escaparHTML(reserva.nota || "Sin informacion adicional")}</p>
+            </div>
+            <p style="margin:20px 0 0;color:#667085;font-size:12px;line-height:1.5;">
+              Este mensaje fue generado automaticamente por el calendario de solicitudes por favor no responder.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </div>`;
+
+  const info = await transporter.sendMail({
+    from: process.env.SMTP_FROM || `"Calendario Solicitudes CABB" <${process.env.SMTP_USER}>`,
     to: reserva.correo,
-    subject: "Confirmacion de solicitud de iPads",
-    text: texto
+    subject: `${tituloCorreo} - correo automatico por favor no responder`,
+    text: texto,
+    html
   });
 
-  return { enviado: true };
+  return { enviado: true, messageId: info.messageId };
 }
 
-function contarDispositivosReservados(fecha, excluirId = null) {
+function contarDispositivosReservados(fecha, hour, excluirId = null) {
   return reservas
-    .filter(r => r.fecha === fecha && r.id !== excluirId && r.estado !== "rechazado")
+    .filter(r =>
+      r.fecha === fecha &&
+      r.hour === hour &&
+      r.id !== excluirId &&
+      r.estado !== "rechazado"
+    )
     .reduce((total, r) => total + (parseInt(r.cantidad, 10) || 0), 0);
 }
 
@@ -221,19 +336,19 @@ function obtenerMaxDispositivosPorDia(fecha) {
   return Number.isInteger(limite) && limite > 0 ? limite : MAX_DISPOSITIVOS_POR_DIA;
 }
 
-function validarCapacidadDiaria(fecha, cantidad, excluirId = null) {
+function validarCapacidadHorario(fecha, hour, cantidad, excluirId = null) {
   const cantidadSolicitada = parseInt(cantidad, 10);
 
   if (!Number.isInteger(cantidadSolicitada) || cantidadSolicitada <= 0) {
     return { error: "Ingresa una cantidad valida de dispositivos" };
   }
 
-  const usados = contarDispositivosReservados(fecha, excluirId);
+  const usados = contarDispositivosReservados(fecha, hour, excluirId);
   const disponibles = obtenerMaxDispositivosPorDia(fecha) - usados;
 
   if (cantidadSolicitada > disponibles) {
     return {
-      error: "No hay suficientes iPads disponibles para ese dia."
+      error: "No hay suficientes iPads disponibles para ese horario."
     };
   }
 
@@ -282,7 +397,7 @@ function validarSolicitudReserva({ fecha, hour, equipo, usuario, cantidad, corre
     return { error: "El correo debe pertenecer al dominio @colamericano.edu.co" };
   }
 
-  const capacidad = validarCapacidadDiaria(fecha, cantidad);
+  const capacidad = validarCapacidadHorario(fecha, hour, cantidad);
   if (capacidad.error) {
     return { error: capacidad.error };
   }
@@ -302,6 +417,35 @@ function validarSolicitudReserva({ fecha, hour, equipo, usuario, cantidad, corre
   }
 
   return { capacidad };
+}
+
+function textoNormalizado(valor) {
+  return String(valor || "").trim().toLowerCase();
+}
+
+function buscarReservaDuplicadaReciente({ clientRequestId, fecha, hour, usuario, curso, cantidad, correo, nota }) {
+  if (clientRequestId) {
+    const existentePorRequest = reservas.find(r => r.clientRequestId === clientRequestId);
+    if (existentePorRequest) return existentePorRequest;
+  }
+
+  const ahora = Date.now();
+  const ventanaDuplicadoMs = 5 * 60 * 1000;
+  const cantidadNormalizada = parseInt(cantidad, 10);
+
+  return reservas.find(r => {
+    const creadoEn = Date.parse(r.creadoEn || "");
+    return r.estado !== "rechazado" &&
+      r.fecha === fecha &&
+      r.hour === hour &&
+      textoNormalizado(r.usuario) === textoNormalizado(usuario) &&
+      textoNormalizado(r.curso) === textoNormalizado(curso) &&
+      parseInt(r.cantidad, 10) === cantidadNormalizada &&
+      textoNormalizado(r.correo) === textoNormalizado(correo) &&
+      textoNormalizado(r.nota) === textoNormalizado(nota) &&
+      Number.isFinite(creadoEn) &&
+      ahora - creadoEn <= ventanaDuplicadoMs;
+  });
 }
 
 // =======================
@@ -337,7 +481,17 @@ app.post("/reservas/validar", (req, res) => {
 
 // POST nueva reserva
 app.post("/reservas", async (req, res) => {
-  const { fecha, hour, equipo, usuario, curso, cantidad, correo, nota } = req.body;
+  const { clientRequestId, fecha, hour, equipo, usuario, curso, cantidad, correo, nota } = req.body;
+
+  const reservaDuplicada = buscarReservaDuplicadaReciente(req.body);
+  if (reservaDuplicada) {
+    return res.json({
+      message: "Reserva creada ✅",
+      reserva: reservaDuplicada,
+      duplicada: true,
+      correo: { enviado: false, razon: "Solicitud duplicada; se reutilizo la reserva existente" }
+    });
+  }
 
   const validacion = validarSolicitudReserva(req.body, obtenerRolDesdeToken(req));
   if (validacion.error) {
@@ -347,6 +501,7 @@ app.post("/reservas", async (req, res) => {
   const nuevaReserva = {
     id: Date.now(), // ID único basado en timestamp
     creadoEn: new Date().toISOString(),
+    clientRequestId: clientRequestId || "",
     fecha,
     hour,
     equipo,
@@ -360,13 +515,19 @@ app.post("/reservas", async (req, res) => {
 
   reservas.push(nuevaReserva);
   guardarReservas();
-  await enviarCorreoReserva(nuevaReserva);
+  let correoResultado = { enviado: false, razon: "No se intento enviar" };
+  try {
+    correoResultado = await enviarCorreoReserva(nuevaReserva);
+  } catch (error) {
+    console.error("No se pudo enviar el correo de confirmacion:", error.message);
+    correoResultado = { enviado: false, razon: error.message };
+  }
 
-  res.json({ message: "Reserva creada ✅", reserva: nuevaReserva });
+  res.json({ message: "Reserva creada ✅", reserva: nuevaReserva, correo: correoResultado });
 });
 
 // PUT cambiar estado de reserva (solo admin)
-app.put("/reservas/:id", requerirAdmin, (req, res) => {
+app.put("/reservas/:id", requerirAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const { estado } = req.body;
 
@@ -381,16 +542,27 @@ app.put("/reservas/:id", requerirAdmin, (req, res) => {
   }
 
   if (estado === "aprobado") {
-    const capacidad = validarCapacidadDiaria(reserva.fecha, reserva.cantidad, reserva.id);
+    const capacidad = validarCapacidadHorario(reserva.fecha, reserva.hour, reserva.cantidad, reserva.id);
     if (capacidad.error) {
       return res.status(400).json({ error: capacidad.error });
     }
   }
 
+  const estadoAnterior = reserva.estado;
   reserva.estado = estado;
   guardarReservas();
+  let correoResultado = { enviado: false, razon: "No se intento enviar" };
 
-  res.json({ message: "Estado actualizado ✅", reserva });
+  if (estado === "rechazado" && estadoAnterior !== "rechazado") {
+    try {
+      correoResultado = await enviarCorreoReserva(reserva);
+    } catch (error) {
+      console.error("No se pudo enviar el correo de rechazo:", error.message);
+      correoResultado = { enviado: false, razon: error.message };
+    }
+  }
+
+  res.json({ message: "Estado actualizado ✅", reserva, correo: correoResultado });
 });
 
 // DELETE eliminar reserva (solo admin)

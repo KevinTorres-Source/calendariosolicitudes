@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendario de Solicitudes - CABB</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=61">
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <!-- LOGO COLEGIO -->
+      <div class="sidebar-logo-img">
+        <img src="Images/Logo2.jpeg" alt="Logo Colegio">
+      </div>
+
+      <!-- ENCABEZADO -->
+      <div class="sidebar-header-card">
+        <div class="sidebar-header-body">
+          <span class="logo-sub">Colegio Americano de Bogotá</span>
+        </div>
+      </div>
+
+      <!-- MINI CALENDARIO -->
+      <div class="sidebar-section">
+        <span class="logo-titulo">Prestamo de iPads</span>
+        <div class="mini-calendar-card">
+          <div class="mini-calendar-top">
+            <div class="mini-month-menu" id="miniMonthMenu">
+              <button class="mini-month-button" id="miniMonthButton" type="button" aria-haspopup="listbox" aria-expanded="false">
+                <span id="miniMonthLabel">JUN</span>
+                <span class="mini-month-arrow" aria-hidden="true">▾</span>
+              </button>
+              <div class="mini-month-options" id="miniMonthOptions" role="listbox" aria-label="Seleccionar mes"></div>
+            </div>
+            <span id="miniCalendarYear" class="mini-calendar-year">2026</span>
+          </div>
+          <div id="miniCalendar"></div>
+        </div>
+      </div>
+
+      <!-- PANEL ADMIN -->
+      <div class="admin-panel">
+        <div id="sessionUserBadge" class="session-user-badge" style="display:none;"></div>
+        <button id="btnPanelAdmin" style="display:none;">Panel administrador</button>
+        <button id="btnAdmin"><span aria-hidden="true">👤</span> Login</button>
+        <button id="btnLogout" style="display:none;">Logout</button>
+      </div>
+
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <header class="header">
+        <h1 class="titulo-principal">CALENDARIO DE SOLICITUDES</h1>
+        <h2 id="semanaActual"></h2>
+      </header>
+      <section id="calendar"></section>
+    </main>
+
+  </div>
+
+  <!-- PANEL ADMINISTRADOR -->
+  <div id="adminOverlay" class="admin-overlay" style="display:none;">
+    <section class="admin-dashboard" aria-label="Panel administrador">
+      <header class="admin-dashboard-header">
+        <div>
+          <span class="admin-kicker">Administrador</span>
+          <h3>Panel de seguimiento</h3>
+        </div>
+        <button class="admin-close" id="btnCerrarPanelAdmin" type="button" aria-label="Cerrar">x</button>
+      </header>
+
+      <div class="admin-tabs" role="tablist" aria-label="Opciones de administrador">
+        <button class="admin-tab active" id="tabFeedback" type="button">Feedback</button>
+        <button class="admin-tab" id="tabOpciones" type="button">Opciones</button>
+      </div>
+
+      <div class="admin-view active" id="adminFeedbackView">
+        <div class="admin-summary-grid">
+          <article class="admin-stat">
+            <span>Total respuestas</span>
+            <strong id="adminTotalFeedback">0</strong>
+          </article>
+          <article class="admin-stat">
+            <span>Promedio general</span>
+            <strong id="adminPromedioGeneral">-</strong>
+          </article>
+          <article class="admin-stat strength">
+            <span>Fortaleza</span>
+            <strong id="adminFortaleza">-</strong>
+          </article>
+          <article class="admin-stat weakness">
+            <span>Debilidad</span>
+            <strong id="adminDebilidad">-</strong>
+          </article>
+        </div>
+
+        <div class="admin-chart-grid" id="adminCharts"></div>
+
+        <section class="admin-comments">
+          <div class="admin-section-title">
+            <h4>Comentarios recientes</h4>
+            <button class="admin-secondary" id="btnRefrescarFeedback" type="button">Actualizar</button>
+          </div>
+          <div id="adminComentarios"></div>
+        </section>
+      </div>
+
+      <div class="admin-view" id="adminOpcionesView">
+        <div class="admin-options-grid">
+          <article class="admin-option">
+            <h4>Reservas</h4>
+            <p>En modo administrador puedes hacer clic sobre una reserva para rechazarla o bloquear su horario.</p>
+          </article>
+          <article class="admin-option">
+            <h4>Bloqueos</h4>
+            <p>En modo administrador puedes hacer clic sobre un horario disponible para bloquearlo.</p>
+          </article>
+          <article class="admin-option">
+            <h4>Feedback</h4>
+            <p>Las respuestas se guardan para analizar tendencias cuando haya un mayor volumen de registros.</p>
+          </article>
+        </div>
+      </div>
+
+      <p class="admin-status" id="adminStatus" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <!-- FEEDBACK -->
+  <section class="feedback-widget" id="feedbackWidget" aria-label="Califica nuestro servicio">
+    <button class="feedback-toggle" id="btnFeedbackToggle" type="button" aria-expanded="false" aria-controls="feedbackPanel">
+      Califica nuestro servicio
+    </button>
+
+    <form class="feedback-panel" id="feedbackPanel" style="display:none;">
+      <div class="feedback-header">
+        <h3>Califica nuestro servicio</h3>
+        <button class="feedback-close" id="btnFeedbackCerrar" type="button" aria-label="Cerrar">x</button>
+      </div>
+
+      <div class="feedback-field">
+        <label for="feedbackWifi">&iquest;C&oacute;mo califica la red WiFi?</label>
+        <span class="feedback-help">(Utilizando la red adecuada del sal&oacute;n en el que se encuentra)</span>
+        <select id="feedbackWifi">
+          <option value="">Seleccionar</option>
+          <option value="5">Excelente</option>
+          <option value="4">Buena</option>
+          <option value="3">Aceptable</option>
+          <option value="2">Regular</option>
+          <option value="1">Deficiente</option>
+        </select>
+      </div>
+
+      <div class="feedback-field">
+        <label for="feedbackColaboradores">&iquest;C&oacute;mo califica el servicio recibido por nuestros colaboradores?</label>
+        <select id="feedbackColaboradores">
+          <option value="">Seleccionar</option>
+          <option value="5">Excelente</option>
+          <option value="4">Buena</option>
+          <option value="3">Aceptable</option>
+          <option value="2">Regular</option>
+          <option value="1">Deficiente</option>
+        </select>
+      </div>
+
+      <div class="feedback-field">
+        <label for="feedbackDispositivos">&iquest;C&oacute;mo califica los dispositivos prestados?</label>
+        <select id="feedbackDispositivos">
+          <option value="">Seleccionar</option>
+          <option value="5">Excelente</option>
+          <option value="4">Buena</option>
+          <option value="3">Aceptable</option>
+          <option value="2">Regular</option>
+          <option value="1">Deficiente</option>
+        </select>
+      </div>
+
+      <div class="feedback-field">
+        <label for="feedbackComentario">Deje un comentario con alguna observaci&oacute;n</label>
+        <textarea id="feedbackComentario" placeholder="Escriba su observaci&oacute;n..."></textarea>
+      </div>
+
+      <p class="feedback-status" id="feedbackStatus" aria-live="polite"></p>
+
+      <div class="feedback-actions">
+        <button class="btn-cancelar" id="btnFeedbackCancelar" type="button">Cancelar</button>
+        <button class="btn-confirmar" id="btnFeedbackEnviar" type="submit">Enviar</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- MODAL -->
+  <div id="modalOverlay" class="modal-overlay" style="display:none;">
+    <div class="modal">
+      <button class="modal-close" id="btnCerrarModal">✕</button>
+      <h3 class="modal-titulo">Nueva Solicitud</h3>
+      <p class="modal-fecha" id="modalFechaHora"></p>
+
+      <div class="form-group">
+        <label>Nombre y Apellido <span class="req">*</span></label>
+        <input type="text" id="inputNombre" placeholder="Ej: María García" />
+      </div>
+      <div class="form-group">
+        <label>Cantidad de iPads <span class="req">*</span></label>
+        <input type="number" id="inputCantidad" placeholder="Ej: 15" min="1" />
+      </div>
+      <div class="form-group">
+        <label>Curso <span class="req">*</span></label>
+        <input type="text" id="inputCurso" maxlength="4" oninput="this.value = this.value.replace(/\D/g, '')" placeholder="Ej: 505"/>
+      </div>
+      <div class="form-group">
+        <label>Correo electr&oacute;nico <span class="req">*</span></label>
+        <input type="email" id="inputCorreo" placeholder="nombre@colamericano.edu.co" autocomplete="email" />
+        <span class="field-help">Solo se permite el dominio @colamericano.edu.co</span>
+      </div>
+      <div class="form-group">
+        <label>Información adicional <span class="opcional">(opcional)</span></label>
+        <textarea id="inputNota" placeholder="Ej: Para actividad en Richmond..."></textarea>
+      </div>
+
+      <p class="form-status" id="solicitudStatus" aria-live="polite"></p>
+
+      <div class="modal-acciones">
+        <button class="btn-cancelar" id="btnCancelarModal">Cancelar</button>
+        <button class="btn-confirmar" id="btnConfirmarReserva">Confirmar solicitud</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL RESPONSABILIDAD -->
+  <div id="responsabilidadOverlay" class="modal-overlay" style="display:none;">
+    <div class="modal modal-responsabilidad">
+      <h3 class="modal-titulo">¡IMPORTANTE!</h3>
+      <p class="modal-subtitulo">(Lea con atención)</p>
+
+      <div class="responsabilidad-texto">
+        <p>Les recordamos que el préstamo y uso de los dispositivos iPad tiene como propósito fortalecer el desarrollo pedagógico de las clases. Para garantizar el adecuado uso de estos equipos, es importante tener en cuenta las siguientes condiciones y criterios:</p>
+
+        <h4>ANTES Y DURANTE EL USO:</h4>
+        <ul>
+          <li>Brindar previamente las instrucciones de uso a los estudiantes, según la actividad planeada.</li>
+          <li>Hacer seguimiento activo al uso de los equipos durante la clase.</li>
+        </ul>
+
+        <h4>OBLIGACIONES Y RESPONSABILIDADES PARA EL USO CORRECTO DE LOS DISPOSITIVOS:</h4>
+        <ul>
+          <li>No tomar fotografías o videos, salvo que estén contemplados en la actividad pedagógica.</li>
+          <li>No utilizar los equipos para juegos u otros fines no relacionados con la clase.</li>
+          <li>No modificar el fondo de pantalla ni realizar ajustes no autorizados en el dispositivo.</li>
+        </ul>
+      </div>
+
+      <div class="modal-acciones">
+        <button class="btn-cancelar" id="btnCancelarResponsabilidad">Cancelar solicitud</button>
+        <button class="btn-confirmar" id="btnAceptarResponsabilidad">He leído y estoy de acuerdo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL CONFIRMACION ADMIN -->
+  <div id="confirmacionAdminOverlay" class="modal-overlay" style="display:none;">
+    <div class="modal modal-confirmacion">
+      <button class="modal-close" id="btnCerrarConfirmacionAdmin" type="button">x</button>
+      <h3 class="modal-titulo" id="confirmacionAdminTitulo">Confirm action</h3>
+      <p class="modal-confirmacion-texto" id="confirmacionAdminTexto"></p>
+      <div class="modal-acciones">
+        <button class="btn-cancelar" id="btnCancelarConfirmacionAdmin" type="button">Cancel</button>
+        <button class="btn-confirmar btn-danger-admin" id="btnAceptarConfirmacionAdmin" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL LIMITE DIARIO -->
+  <div id="limiteSolicitudesOverlay" class="modal-overlay" style="display:none;">
+    <div class="modal modal-limite">
+      <button class="modal-close" id="btnCerrarLimiteSolicitudes" type="button">x</button>
+      <span class="modal-kicker" id="limiteSolicitudesKicker">Solicitudes por hora</span>
+      <h3 class="modal-titulo" id="limiteSolicitudesTitulo">Límite diario</h3>
+      <p class="modal-confirmacion-texto" id="limiteSolicitudesTexto"></p>
+      <div class="limit-stepper" aria-label="Límite de solicitudes por hora">
+        <button class="limit-stepper-btn" id="btnDisminuirLimite" type="button" aria-label="Disminuir">-</button>
+        <input id="inputLimiteDia" class="limit-stepper-input" type="number" min="1" step="1">
+        <button class="limit-stepper-btn" id="btnAumentarLimite" type="button" aria-label="Aumentar">+</button>
+      </div>
+      <p class="admin-status" id="limiteSolicitudesStatus" aria-live="polite"></p>
+      <div class="modal-acciones">
+        <button class="btn-cancelar" id="btnRestablecerLimiteDia" type="button">Default 2</button>
+        <button class="btn-confirmar" id="btnGuardarLimiteDia" type="button">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL GESTION DE RESERVAS -->
+  <div id="reservaAdminOverlay" class="modal-overlay" style="display:none;">
+    <div class="modal modal-reserva-admin">
+      <button class="modal-close" id="btnCerrarReservaAdmin" type="button">x</button>
+      <span class="modal-kicker">Gestionar horario</span>
+      <h3 class="modal-titulo" id="reservaAdminTitulo">Reserva</h3>
+      <p class="modal-confirmacion-texto" id="reservaAdminTexto"></p>
+      <div class="reserva-admin-list" id="reservaAdminLista"></div>
+      <p class="admin-status" id="reservaAdminStatus" aria-live="polite"></p>
+      <div class="modal-acciones">
+        <button class="btn-cancelar" id="btnCancelarReservaAdmin" type="button">Cancelar</button>
+        <button class="btn-confirmar btn-danger-admin" id="btnBloquearReservaAdmin" type="button">Bloquear hora</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=47"></script>
+</body>
+</html>

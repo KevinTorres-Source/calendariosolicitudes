@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ingreso - Calendario CABB</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=45">
+</head>
+<body class="login-page">
+  <main class="login-shell">
+    <section class="login-card" aria-label="Ingreso de usuarios internos">
+      <div class="login-logo">
+        <img src="Images/Logo2.jpeg" alt="Logo Colegio">
+      </div>
+
+      <span class="login-kicker">Colegio Americano de Bogotá</span>
+
+      <form id="loginForm" class="login-form">
+        <div class="form-group">
+          <label for="loginUsuario">User</label>
+          <input type="text" id="loginUsuario" autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" autocomplete="current-password">
+          <p class="caps-warning" id="capsWarning" style="display:none;">Mayúsculas activadas</p>
+        </div>
+
+        <p class="login-status" id="loginStatus" aria-live="polite"></p>
+
+        <button class="btn-confirmar login-submit" id="btnLoginSubmit" type="submit">Login</button>
+        <a class="login-back" href="index.html">Back to Calendar</a>
+      </form>
+    </section>
+  </main>
+
+  <script src="login.js?v=9"></script>
+</body>
+</html>

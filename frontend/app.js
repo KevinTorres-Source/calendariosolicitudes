@@ -11,6 +11,7 @@ let modoAdmin = localStorage.getItem("modoAdmin") === "true";
 let pendingFecha = null;
 let pendingHour  = null;
 let pendingReservaPayload = null;
+let confirmandoResponsabilidad = false;
 let pendingConfirmacionAdmin = null;
 let pendingLimiteContexto = null;
 let pendingAdminReservasHorario = [];
@@ -119,15 +120,20 @@ function leerFeedbackLocal() {
 }
 function guardarFeedbackLocal(f) { localStorage.setItem("feedbackServicio", JSON.stringify(f)); }
 
-function contarDispositivosReservados(reservas, fecha, excluirId = null) {
+function contarDispositivosReservados(reservas, fecha, hour, excluirId = null) {
   return reservas
-    .filter(r => r.fecha === fecha && r.id !== excluirId && r.estado !== "rechazado")
+    .filter(r =>
+      r.fecha === fecha &&
+      r.hour === hour &&
+      r.id !== excluirId &&
+      r.estado !== "rechazado"
+    )
     .reduce((total, r) => total + (parseInt(r.cantidad, 10) || 0), 0);
 }
 
-function validarCapacidadDiaria(reservas, fecha, cantidad, excluirId = null) {
+function validarCapacidadHorario(reservas, fecha, hour, cantidad, excluirId = null) {
   const cantidadSolicitada = parseInt(cantidad, 10);
-  const usados = contarDispositivosReservados(reservas, fecha, excluirId);
+  const usados = contarDispositivosReservados(reservas, fecha, hour, excluirId);
   const disponibles = obtenerMaxDispositivosPorDia(fecha) - usados;
 
   if (!Number.isInteger(cantidadSolicitada) || cantidadSolicitada <= 0) {
@@ -136,7 +142,7 @@ function validarCapacidadDiaria(reservas, fecha, cantidad, excluirId = null) {
 
   if (cantidadSolicitada > disponibles) {
     return {
-      error: "No hay suficientes iPads disponibles para ese día."
+      error: "No hay suficientes iPads disponibles para ese horario."
     };
   }
 
@@ -250,7 +256,7 @@ async function crearReservaAPI(payload) {
   const bloqueos = leerBloqueosLocal();
   if (bloqueos.find(b => b.fecha === payload.fecha && (b.hour === payload.hour || b.hour === null)))
     return { error: "Este horario está bloqueado 🚫" };
-  const capacidad = validarCapacidadDiaria(reservas, payload.fecha, payload.cantidad);
+  const capacidad = validarCapacidadHorario(reservas, payload.fecha, payload.hour, payload.cantidad);
   if (capacidad.error) return { error: capacidad.error };
 
   let nueva = {
@@ -274,7 +280,15 @@ async function crearReservaAPI(payload) {
     } catch {}
   }
 
-  reservas.push(nueva);
+  const existenteIndex = reservas.findIndex(reserva =>
+    reserva.id === nueva.id ||
+    (nueva.clientRequestId && reserva.clientRequestId === nueva.clientRequestId)
+  );
+  if (existenteIndex === -1) {
+    reservas.push(nueva);
+  } else {
+    reservas[existenteIndex] = nueva;
+  }
   guardarReservasLocal(reservas);
   return { message: "OK", reserva: nueva };
 }
@@ -286,7 +300,7 @@ async function validarReservaAPI(payload) {
   const bloqueos = leerBloqueosLocal();
   if (bloqueos.find(b => b.fecha === payload.fecha && (b.hour === payload.hour || b.hour === null)))
     return { error: "Este horario está bloqueado 🚫" };
-  const capacidad = validarCapacidadDiaria(reservas, payload.fecha, payload.cantidad);
+  const capacidad = validarCapacidadHorario(reservas, payload.fecha, payload.hour, payload.cantidad);
   if (capacidad.error) return { error: capacidad.error };
 
   if (backendDisponible) {
@@ -511,6 +525,10 @@ function mostrarErrorSolicitud(mensaje, inputId = null) {
   if (inputId) document.getElementById(inputId).focus();
 }
 
+function esErrorLimiteSolicitudes(mensaje) {
+  return String(mensaje || "").includes("alcanzó el límite");
+}
+
 async function confirmarReserva() {
   const nombre   = document.getElementById("inputNombre").value.trim();
   const cantidad = document.getElementById("inputCantidad").value.trim();
@@ -532,6 +550,9 @@ async function confirmarReserva() {
   }
 
   const payload = {
+    clientRequestId: window.crypto?.randomUUID
+      ? window.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     fecha: pendingFecha, hour: pendingHour,
     usuario: nombre,
     equipo: `${cantidad} iPads · ${curso}`,
@@ -547,17 +568,37 @@ async function confirmarReserva() {
 }
 
 function cancelarResponsabilidad() {
+  if (confirmandoResponsabilidad) return;
   document.getElementById("responsabilidadOverlay").style.display = "none";
   pendingReservaPayload = null;
   pendingFecha = pendingHour = null;
 }
 
 async function aceptarResponsabilidad() {
-  if (!pendingReservaPayload) return;
+  if (!pendingReservaPayload || confirmandoResponsabilidad) return;
 
-  const data = await crearReservaAPI(pendingReservaPayload);
+  confirmandoResponsabilidad = true;
+  const boton = document.getElementById("btnAceptarResponsabilidad");
+  const cancelar = document.getElementById("btnCancelarResponsabilidad");
+  const textoOriginal = boton.textContent;
+  boton.disabled = true;
+  cancelar.disabled = true;
+  boton.textContent = "Enviando solicitud...";
+
+  let data;
+  try {
+    data = await crearReservaAPI(pendingReservaPayload);
+  } catch (error) {
+    data = { error: error.message || "No se pudo crear la solicitud." };
+  } finally {
+    confirmandoResponsabilidad = false;
+    boton.disabled = false;
+    cancelar.disabled = false;
+    boton.textContent = textoOriginal;
+  }
+
   if (data.error) {
-    alert(data.error);
+    if (!esErrorLimiteSolicitudes(data.error)) alert(data.error);
     cancelarResponsabilidad();
     renderSemana();
     return;
@@ -1095,7 +1136,7 @@ function abrirModalLimiteDia({ tipo, fecha, kicker, texto, actual, defaultValue 
   document.getElementById("limiteSolicitudesTitulo").textContent = fecha;
   document.getElementById("limiteSolicitudesTexto").textContent = texto;
   document.getElementById("inputLimiteDia").value = actual;
-  document.getElementById("limiteSolicitudesStatus").textContent = `Default: ${defaultValue}`;
+  document.getElementById("limiteSolicitudesStatus").textContent = "";
   document.getElementById("btnRestablecerLimiteDia").textContent = `Default ${defaultValue}`;
   document.getElementById("limiteSolicitudesOverlay").style.display = "flex";
 }
@@ -1167,6 +1208,14 @@ const feedbackLabels = {
   1: "Deficiente"
 };
 
+const feedbackChartColors = {
+  5: "#16a34a",
+  4: "#22c55e",
+  3: "#f59e0b",
+  2: "#f97316",
+  1: "#ef4444"
+};
+
 function escaparHTML(texto) {
   return String(texto || "")
     .replace(/&/g, "&amp;")
@@ -1196,6 +1245,21 @@ async function abrirPanelAdmin() {
 }
 
 function calcularMetricasFeedback(feedback) {
+  const conteosGenerales = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const tendencia = feedback
+    .map(item => {
+      const valores = feedbackPreguntas
+        .map(pregunta => parseInt(item[pregunta.key], 10))
+        .filter(valor => Number.isInteger(valor) && valor >= 1 && valor <= 5);
+      valores.forEach(valor => { conteosGenerales[valor] += 1; });
+      return {
+        creadoEn: item.creadoEn,
+        promedio: valores.length ? valores.reduce((sum, valor) => sum + valor, 0) / valores.length : 0
+      };
+    })
+    .filter(item => item.promedio > 0)
+    .sort((a, b) => new Date(a.creadoEn || 0) - new Date(b.creadoEn || 0));
+
   const metricas = feedbackPreguntas.map(pregunta => {
     const valores = feedback
       .map(item => parseInt(item[pregunta.key], 10))
@@ -1212,35 +1276,134 @@ function calcularMetricasFeedback(feedback) {
     ? conDatos.reduce((sum, metrica) => sum + metrica.promedio, 0) / conDatos.length
     : 0;
   const ordenadas = [...conDatos].sort((a, b) => b.promedio - a.promedio);
+  const totalCalificaciones = Object.values(conteosGenerales).reduce((sum, cantidad) => sum + cantidad, 0);
+  const favorables = totalCalificaciones
+    ? Math.round(((conteosGenerales[4] + conteosGenerales[5]) / totalCalificaciones) * 100)
+    : 0;
 
   return {
     metricas,
+    conteosGenerales,
+    totalCalificaciones,
+    favorables,
+    tendencia,
     promedioGeneral,
     fortaleza: ordenadas[0]?.label || "-",
     debilidad: ordenadas[ordenadas.length - 1]?.label || "-"
   };
 }
 
+function crearSegmentosConic(conteos, total) {
+  if (!total) return "#eef2f7 0 360deg";
+
+  let inicio = 0;
+  return [5, 4, 3, 2, 1].map(valor => {
+    const grados = (conteos[valor] / total) * 360;
+    const fin = inicio + grados;
+    const segmento = `${feedbackChartColors[valor]} ${inicio.toFixed(2)}deg ${fin.toFixed(2)}deg`;
+    inicio = fin;
+    return segmento;
+  }).join(", ");
+}
+
+function renderAdminOverallChart(conteos, total, promedioGeneral) {
+  const contenedor = document.getElementById("adminOverallChart");
+  const segmentos = crearSegmentosConic(conteos, total);
+  const leyenda = [5, 4, 3, 2, 1].map(valor => {
+    const porcentaje = total ? Math.round((conteos[valor] / total) * 100) : 0;
+    return `
+      <li>
+        <span class="admin-legend-dot" style="background:${feedbackChartColors[valor]}"></span>
+        <span>${feedbackLabels[valor]}</span>
+        <strong>${porcentaje}%</strong>
+      </li>`;
+  }).join("");
+
+  contenedor.innerHTML = `
+    <div class="admin-donut" style="background: conic-gradient(${segmentos});">
+      <div class="admin-donut-center">
+        <span>Promedio</span>
+        <strong>${promedioGeneral ? promedioGeneral.toFixed(1) : "-"}</strong>
+      </div>
+    </div>
+    <ul class="admin-legend">${leyenda}</ul>`;
+}
+
+function renderAdminTrendChart(tendencia) {
+  const contenedor = document.getElementById("adminTrendChart");
+  if (!tendencia.length) {
+    contenedor.innerHTML = '<p class="admin-empty">Aun no hay datos suficientes para graficar la tendencia.</p>';
+    return;
+  }
+
+  const width = 680;
+  const height = 230;
+  const padding = 28;
+  const puntos = tendencia.map((item, index) => {
+    const x = tendencia.length === 1
+      ? width / 2
+      : padding + (index * (width - padding * 2)) / (tendencia.length - 1);
+    const y = padding + ((5 - item.promedio) * (height - padding * 2)) / 4;
+    return { x, y, promedio: item.promedio, creadoEn: item.creadoEn };
+  });
+  const path = puntos.map((punto, index) => `${index ? "L" : "M"} ${punto.x.toFixed(1)} ${punto.y.toFixed(1)}`).join(" ");
+  const area = `${path} L ${puntos[puntos.length - 1].x.toFixed(1)} ${height - padding} L ${puntos[0].x.toFixed(1)} ${height - padding} Z`;
+  const ultimo = puntos[puntos.length - 1];
+  const etiquetaFecha = ultimo.creadoEn
+    ? new Date(ultimo.creadoEn).toLocaleDateString("es-CO", { month: "short", day: "numeric" })
+    : "Última";
+
+  contenedor.innerHTML = `
+    <svg class="admin-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Tendencia de calificacion del servicio">
+      <defs>
+        <linearGradient id="adminTrendFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.32"></stop>
+          <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"></stop>
+        </linearGradient>
+      </defs>
+      <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" class="admin-axis"></line>
+      <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" class="admin-axis"></line>
+      <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" class="admin-grid-line"></line>
+      <line x1="${padding}" y1="${height / 2}" x2="${width - padding}" y2="${height / 2}" class="admin-grid-line"></line>
+      <path d="${area}" class="admin-trend-area"></path>
+      <path d="${path}" class="admin-trend-line"></path>
+      ${puntos.map(punto => `<circle cx="${punto.x.toFixed(1)}" cy="${punto.y.toFixed(1)}" r="4" class="admin-trend-point"></circle>`).join("")}
+      <text x="${padding - 8}" y="${padding + 4}" class="admin-axis-label">5</text>
+      <text x="${padding - 8}" y="${height - padding + 4}" class="admin-axis-label">1</text>
+    </svg>
+    <div class="admin-trend-caption">
+      <span>Última medición</span>
+      <strong>${ultimo.promedio.toFixed(1)}</strong>
+      <em>${escaparHTML(etiquetaFecha)}</em>
+    </div>`;
+}
+
 function renderAdminCharts(metricas) {
   const contenedor = document.getElementById("adminCharts");
   contenedor.innerHTML = metricas.map(metrica => {
-    const max = Math.max(...Object.values(metrica.conteos), 1);
+    const max = Math.max(metrica.total, 1);
     const filas = [5, 4, 3, 2, 1].map(valor => {
       const cantidad = metrica.conteos[valor];
       const ancho = Math.round((cantidad / max) * 100);
       return `
         <div class="admin-bar-row">
           <span>${feedbackLabels[valor]}</span>
-          <div class="admin-bar-track"><span class="admin-bar-fill" style="width:${ancho}%"></span></div>
-          <strong>${cantidad}</strong>
+          <div class="admin-bar-track"><span class="admin-bar-fill" style="width:${ancho}%; background:${feedbackChartColors[valor]}"></span></div>
+          <strong>${ancho}%</strong>
         </div>`;
     }).join("");
 
     const promedio = metrica.total ? metrica.promedio.toFixed(1) : "-";
     return `
       <article class="admin-chart">
-        <h4>${metrica.label}</h4>
-        <p class="admin-chart-meta">Promedio: ${promedio} - Respuestas: ${metrica.total}</p>
+        <div class="admin-chart-head">
+          <div>
+            <span class="admin-panel-label">Pregunta</span>
+            <h4>${metrica.label}</h4>
+          </div>
+          <strong>${promedio}</strong>
+        </div>
+        <p class="admin-chart-meta">${metrica.total} respuestas registradas</p>
         ${filas}
       </article>`;
   }).join("");
@@ -1281,13 +1444,23 @@ async function renderPanelFeedback() {
   }
 
   const feedback = Array.isArray(data) ? data : [];
-  const { metricas, promedioGeneral, fortaleza, debilidad } = calcularMetricasFeedback(feedback);
+  const {
+    metricas,
+    conteosGenerales,
+    totalCalificaciones,
+    favorables,
+    tendencia,
+    promedioGeneral,
+    debilidad
+  } = calcularMetricasFeedback(feedback);
 
   document.getElementById("adminTotalFeedback").textContent = feedback.length;
   document.getElementById("adminPromedioGeneral").textContent = promedioGeneral ? promedioGeneral.toFixed(1) : "-";
-  document.getElementById("adminFortaleza").textContent = fortaleza;
+  document.getElementById("adminFortaleza").textContent = feedback.length ? `${favorables}%` : "-";
   document.getElementById("adminDebilidad").textContent = debilidad;
 
+  renderAdminOverallChart(conteosGenerales, totalCalificaciones, promedioGeneral);
+  renderAdminTrendChart(tendencia);
   renderAdminCharts(metricas);
   renderAdminComentarios(feedback);
   status.textContent = feedback.length ? "Feedback actualizado." : "Aun no hay respuestas de feedback.";

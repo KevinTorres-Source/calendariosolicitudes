@@ -6,7 +6,7 @@
   <title>Calendario de Solicitudes - CABB</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=61">
+  <link rel="stylesheet" href="style.css?v=62">
 </head>
 <body>
 
@@ -93,7 +93,7 @@
             <strong id="adminPromedioGeneral">-</strong>
           </article>
           <article class="admin-stat strength">
-            <span>Fortaleza</span>
+            <span>Favorables</span>
             <strong id="adminFortaleza">-</strong>
           </article>
           <article class="admin-stat weakness">
@@ -102,15 +102,33 @@
           </article>
         </div>
 
-        <div class="admin-chart-grid" id="adminCharts"></div>
+        <div class="admin-dashboard-grid">
+          <section class="admin-visual-panel admin-main-chart">
+            <div class="admin-section-title">
+              <div>
+                <span class="admin-panel-label">Calificaciones</span>
+                <h4>Tendencia del servicio</h4>
+              </div>
+              <button class="admin-secondary" id="btnRefrescarFeedback" type="button">Actualizar</button>
+            </div>
+            <div id="adminTrendChart" class="admin-trend-chart"></div>
+          </section>
 
-        <section class="admin-comments">
-          <div class="admin-section-title">
-            <h4>Comentarios recientes</h4>
-            <button class="admin-secondary" id="btnRefrescarFeedback" type="button">Actualizar</button>
-          </div>
-          <div id="adminComentarios"></div>
-        </section>
+          <section class="admin-visual-panel admin-score-panel">
+            <span class="admin-panel-label">Resumen</span>
+            <h4>Distribución general</h4>
+            <div id="adminOverallChart"></div>
+          </section>
+
+          <div class="admin-chart-grid" id="adminCharts"></div>
+
+          <section class="admin-comments">
+            <div class="admin-section-title">
+              <h4>Comentarios recientes</h4>
+            </div>
+            <div id="adminComentarios"></div>
+          </section>
+        </div>
       </div>
 
       <div class="admin-view" id="adminOpcionesView">
@@ -314,6 +332,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=47"></script>
+  <script src="app.js?v=48"></script>
 </body>
 </html>

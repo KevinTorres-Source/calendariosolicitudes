@@ -814,20 +814,30 @@ async function renderSemana() {
         return;
       }
 
+      const reservasHorario = reservas.filter(r =>
+        r.fecha === fechaStr && r.hour === hour && r.estado !== "rechazado");
+      const limiteHorario = obtenerLimiteSolicitudesPorHora(fechaStr);
+      const solicitudesUsadas = reservasHorario.length;
+
       if (!tieneReservaExtendida() && !disponibleParaProfesor) {
         cell.classList.add("no-disponible");
-        cell.innerHTML = `<span class="cell-hora">${hour}</span><span class="cell-libre">Not available</span>`;
+        cell.innerHTML = `
+          <div class="cell-row cell-row-top">
+            <span class="cell-hora">${hour}</span>
+            <span class="cell-libre">Not available</span>
+          </div>
+          ${reservasHorario.length ? `
+            <div class="cell-row cell-row-info">
+              <div class="cell-reservas">${renderReservasHorario(reservasHorario)}</div>
+              <span class="cell-detalle">📋 ${solicitudesUsadas}/${limiteHorario}</span>
+            </div>` : ""}`;
         col.appendChild(cell);
         return;
       }
 
       const bloqueado = bloqueadoDiaCompleto || bloqueos.find(b =>
         b.fecha === fechaStr && (b.hour === hour || b.hour === null));
-      const reservasHorario = reservas.filter(r =>
-        r.fecha === fechaStr && r.hour === hour && r.estado !== "rechazado");
       const reserva = reservasHorario[0];
-      const limiteHorario = obtenerLimiteSolicitudesPorHora(fechaStr);
-      const solicitudesUsadas = reservasHorario.length;
       const horarioLleno = solicitudesUsadas >= limiteHorario;
 
       if (bloqueado) {
@@ -872,7 +882,7 @@ async function renderSemana() {
         cell.innerHTML = `
           <div class="cell-row cell-row-top">
             <span class="cell-hora">${hour}</span>
-            <span class="cell-libre">Disponible</span>
+            <span class="cell-libre">Available</span>
           </div>
           <div class="cell-row cell-row-info">
             <div class="cell-reservas">${renderReservasHorario(reservasHorario)}</div>
@@ -1195,26 +1205,45 @@ async function restablecerLimiteDiaDesdeModal() {
 // PANEL ADMIN
 // =======================
 const feedbackPreguntas = [
-  { key: "wifi", label: "Red WiFi" },
-  { key: "colaboradores", label: "Colaboradores" },
-  { key: "dispositivos", label: "Dispositivos" }
+  { key: "wifi", label: "WiFi network" },
+  { key: "colaboradores", label: "Staff support" },
+  { key: "dispositivos", label: "Devices" }
 ];
 
-const feedbackLabels = {
-  5: "Excelente",
-  4: "Buena",
-  3: "Aceptable",
-  2: "Regular",
-  1: "Deficiente"
-};
+const feedbackRatingValues = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
 
 const feedbackChartColors = {
   5: "#16a34a",
-  4: "#22c55e",
+  4.5: "#22c55e",
+  4: "#65a30d",
+  3.5: "#eab308",
   3: "#f59e0b",
-  2: "#f97316",
+  2.5: "#f97316",
+  2: "#ea580c",
+  1.5: "#f43f5e",
   1: "#ef4444"
 };
+
+function normalizarFeedbackValor(valor) {
+  const numero = parseFloat(valor);
+  return feedbackRatingValues.includes(numero) ? numero : null;
+}
+
+function formatearRating(valor) {
+  return Number.isInteger(valor) ? String(valor) : valor.toFixed(1);
+}
+
+function renderStars(valor) {
+  const rating = Number(valor) || 0;
+  const porcentaje = Math.max(0, Math.min(100, (rating / 5) * 100));
+  const texto = `${formatearRating(rating)} stars`;
+  return `
+    <span class="star-rating-readonly" aria-label="${texto}">
+      <span class="star-rating-base" aria-hidden="true">★★★★★</span>
+      <span class="star-rating-fill" style="width:${porcentaje}%;" aria-hidden="true">★★★★★</span>
+    </span>
+    <span class="star-rating-label">${formatearRating(rating)}</span>`;
+}
 
 function escaparHTML(texto) {
   return String(texto || "")
@@ -1225,14 +1254,6 @@ function escaparHTML(texto) {
     .replace(/'/g, "&#039;");
 }
 
-function activarAdminTab(tab) {
-  const feedbackActivo = tab === "feedback";
-  document.getElementById("tabFeedback").classList.toggle("active", feedbackActivo);
-  document.getElementById("tabOpciones").classList.toggle("active", !feedbackActivo);
-  document.getElementById("adminFeedbackView").classList.toggle("active", feedbackActivo);
-  document.getElementById("adminOpcionesView").classList.toggle("active", !feedbackActivo);
-}
-
 function cerrarPanelAdmin() {
   document.getElementById("adminOverlay").style.display = "none";
 }
@@ -1240,17 +1261,16 @@ function cerrarPanelAdmin() {
 async function abrirPanelAdmin() {
   if (!modoAdmin) return;
   document.getElementById("adminOverlay").style.display = "flex";
-  activarAdminTab("feedback");
   await renderPanelFeedback();
 }
 
 function calcularMetricasFeedback(feedback) {
-  const conteosGenerales = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const conteosGenerales = Object.fromEntries(feedbackRatingValues.map(valor => [valor, 0]));
   const tendencia = feedback
     .map(item => {
       const valores = feedbackPreguntas
-        .map(pregunta => parseInt(item[pregunta.key], 10))
-        .filter(valor => Number.isInteger(valor) && valor >= 1 && valor <= 5);
+        .map(pregunta => normalizarFeedbackValor(item[pregunta.key]))
+        .filter(valor => valor !== null);
       valores.forEach(valor => { conteosGenerales[valor] += 1; });
       return {
         creadoEn: item.creadoEn,
@@ -1262,11 +1282,11 @@ function calcularMetricasFeedback(feedback) {
 
   const metricas = feedbackPreguntas.map(pregunta => {
     const valores = feedback
-      .map(item => parseInt(item[pregunta.key], 10))
-      .filter(valor => Number.isInteger(valor) && valor >= 1 && valor <= 5);
+      .map(item => normalizarFeedbackValor(item[pregunta.key]))
+      .filter(valor => valor !== null);
     const total = valores.length;
     const promedio = total ? valores.reduce((sum, valor) => sum + valor, 0) / total : 0;
-    const conteos = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const conteos = Object.fromEntries(feedbackRatingValues.map(valor => [valor, 0]));
     valores.forEach(valor => { conteos[valor] += 1; });
     return { ...pregunta, valores, total, promedio, conteos };
   });
@@ -1278,7 +1298,9 @@ function calcularMetricasFeedback(feedback) {
   const ordenadas = [...conDatos].sort((a, b) => b.promedio - a.promedio);
   const totalCalificaciones = Object.values(conteosGenerales).reduce((sum, cantidad) => sum + cantidad, 0);
   const favorables = totalCalificaciones
-    ? Math.round(((conteosGenerales[4] + conteosGenerales[5]) / totalCalificaciones) * 100)
+    ? Math.round((feedbackRatingValues
+        .filter(valor => valor >= 4)
+        .reduce((sum, valor) => sum + conteosGenerales[valor], 0) / totalCalificaciones) * 100)
     : 0;
 
   return {
@@ -1297,7 +1319,7 @@ function crearSegmentosConic(conteos, total) {
   if (!total) return "#eef2f7 0 360deg";
 
   let inicio = 0;
-  return [5, 4, 3, 2, 1].map(valor => {
+  return feedbackRatingValues.map(valor => {
     const grados = (conteos[valor] / total) * 360;
     const fin = inicio + grados;
     const segmento = `${feedbackChartColors[valor]} ${inicio.toFixed(2)}deg ${fin.toFixed(2)}deg`;
@@ -1309,12 +1331,12 @@ function crearSegmentosConic(conteos, total) {
 function renderAdminOverallChart(conteos, total, promedioGeneral) {
   const contenedor = document.getElementById("adminOverallChart");
   const segmentos = crearSegmentosConic(conteos, total);
-  const leyenda = [5, 4, 3, 2, 1].map(valor => {
+  const leyenda = feedbackRatingValues.map(valor => {
     const porcentaje = total ? Math.round((conteos[valor] / total) * 100) : 0;
     return `
       <li>
         <span class="admin-legend-dot" style="background:${feedbackChartColors[valor]}"></span>
-        <span>${feedbackLabels[valor]}</span>
+        <span>${renderStars(valor)}</span>
         <strong>${porcentaje}%</strong>
       </li>`;
   }).join("");
@@ -1322,8 +1344,8 @@ function renderAdminOverallChart(conteos, total, promedioGeneral) {
   contenedor.innerHTML = `
     <div class="admin-donut" style="background: conic-gradient(${segmentos});">
       <div class="admin-donut-center">
-        <span>Promedio</span>
-        <strong>${promedioGeneral ? promedioGeneral.toFixed(1) : "-"}</strong>
+        <span>Average</span>
+        <strong>${promedioGeneral ? formatearRating(Number(promedioGeneral.toFixed(1))) : "-"}</strong>
       </div>
     </div>
     <ul class="admin-legend">${leyenda}</ul>`;
@@ -1332,7 +1354,7 @@ function renderAdminOverallChart(conteos, total, promedioGeneral) {
 function renderAdminTrendChart(tendencia) {
   const contenedor = document.getElementById("adminTrendChart");
   if (!tendencia.length) {
-    contenedor.innerHTML = '<p class="admin-empty">Aun no hay datos suficientes para graficar la tendencia.</p>';
+    contenedor.innerHTML = '<p class="admin-empty">Not enough data to chart the trend yet.</p>';
     return;
   }
 
@@ -1350,11 +1372,11 @@ function renderAdminTrendChart(tendencia) {
   const area = `${path} L ${puntos[puntos.length - 1].x.toFixed(1)} ${height - padding} L ${puntos[0].x.toFixed(1)} ${height - padding} Z`;
   const ultimo = puntos[puntos.length - 1];
   const etiquetaFecha = ultimo.creadoEn
-    ? new Date(ultimo.creadoEn).toLocaleDateString("es-CO", { month: "short", day: "numeric" })
-    : "Última";
+    ? new Date(ultimo.creadoEn).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : "Latest";
 
   contenedor.innerHTML = `
-    <svg class="admin-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Tendencia de calificacion del servicio">
+    <svg class="admin-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Service rating trend">
       <defs>
         <linearGradient id="adminTrendFill" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.32"></stop>
@@ -1372,7 +1394,7 @@ function renderAdminTrendChart(tendencia) {
       <text x="${padding - 8}" y="${height - padding + 4}" class="admin-axis-label">1</text>
     </svg>
     <div class="admin-trend-caption">
-      <span>Última medición</span>
+      <span>Latest score</span>
       <strong>${ultimo.promedio.toFixed(1)}</strong>
       <em>${escaparHTML(etiquetaFecha)}</em>
     </div>`;
@@ -1382,12 +1404,12 @@ function renderAdminCharts(metricas) {
   const contenedor = document.getElementById("adminCharts");
   contenedor.innerHTML = metricas.map(metrica => {
     const max = Math.max(metrica.total, 1);
-    const filas = [5, 4, 3, 2, 1].map(valor => {
+    const filas = feedbackRatingValues.map(valor => {
       const cantidad = metrica.conteos[valor];
       const ancho = Math.round((cantidad / max) * 100);
       return `
         <div class="admin-bar-row">
-          <span>${feedbackLabels[valor]}</span>
+          <span>${renderStars(valor)}</span>
           <div class="admin-bar-track"><span class="admin-bar-fill" style="width:${ancho}%; background:${feedbackChartColors[valor]}"></span></div>
           <strong>${ancho}%</strong>
         </div>`;
@@ -1398,12 +1420,12 @@ function renderAdminCharts(metricas) {
       <article class="admin-chart">
         <div class="admin-chart-head">
           <div>
-            <span class="admin-panel-label">Pregunta</span>
+            <span class="admin-panel-label">Question</span>
             <h4>${metrica.label}</h4>
           </div>
           <strong>${promedio}</strong>
         </div>
-        <p class="admin-chart-meta">${metrica.total} respuestas registradas</p>
+        <p class="admin-chart-meta">${metrica.total} recorded responses</p>
         ${filas}
       </article>`;
   }).join("");
@@ -1417,14 +1439,14 @@ function renderAdminComentarios(feedback) {
     .slice(0, 8);
 
   if (!comentarios.length) {
-    contenedor.innerHTML = '<p class="admin-empty">Aun no hay comentarios registrados.</p>';
+    contenedor.innerHTML = '<p class="admin-empty">No comments have been recorded yet.</p>';
     return;
   }
 
   contenedor.innerHTML = comentarios.map(item => {
     const fecha = item.creadoEn
       ? new Date(item.creadoEn).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
-      : "Sin fecha";
+      : "No date";
     return `
       <article class="admin-comment">
         <p>${escaparHTML(item.comentario)}</p>
@@ -1435,7 +1457,7 @@ function renderAdminComentarios(feedback) {
 
 async function renderPanelFeedback() {
   const status = document.getElementById("adminStatus");
-  status.textContent = "Cargando feedback...";
+  status.textContent = "Loading feedback...";
 
   const data = await obtenerFeedbackAdmin();
   if (data.error) {
@@ -1463,7 +1485,7 @@ async function renderPanelFeedback() {
   renderAdminTrendChart(tendencia);
   renderAdminCharts(metricas);
   renderAdminComentarios(feedback);
-  status.textContent = feedback.length ? "Feedback actualizado." : "Aun no hay respuestas de feedback.";
+  status.textContent = feedback.length ? "Feedback updated." : "No feedback responses yet.";
 }
 
 // =======================
@@ -1476,9 +1498,57 @@ function setFeedbackAbierto(abierto) {
   toggle.setAttribute("aria-expanded", abierto ? "true" : "false");
 }
 
+function actualizarStarRating(widget, valorSeleccionado) {
+  const valor = normalizarFeedbackValor(valorSeleccionado) || 0;
+  widget.querySelectorAll(".star-button").forEach(button => {
+    const estrella = parseInt(button.dataset.star, 10);
+    button.classList.toggle("is-filled", valor >= estrella);
+    button.classList.toggle("is-half", valor === estrella - 0.5);
+    button.setAttribute("aria-checked", String(valor === estrella || valor === estrella - 0.5));
+  });
+
+  const valueLabel = widget.querySelector(".star-rating-value");
+  valueLabel.textContent = valor ? `${formatearRating(valor)} / 5` : "Not rated";
+}
+
+function seleccionarStarRating(widget, event, estrella) {
+  const target = document.getElementById(widget.dataset.ratingTarget);
+  const rect = event.currentTarget.getBoundingClientRect();
+  const mitadIzquierda = event.clientX - rect.left < rect.width / 2;
+  const valor = estrella === 1 && mitadIzquierda ? 1 : estrella - (mitadIzquierda ? 0.5 : 0);
+  target.value = formatearRating(valor);
+  actualizarStarRating(widget, valor);
+}
+
+function inicializarStarRatings() {
+  document.querySelectorAll(".star-rating-input").forEach(widget => {
+    const target = document.getElementById(widget.dataset.ratingTarget);
+    widget.innerHTML = "";
+
+    for (let estrella = 1; estrella <= 5; estrella += 1) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "star-button";
+      button.dataset.star = String(estrella);
+      button.setAttribute("role", "radio");
+      button.setAttribute("aria-label", `${estrella} stars`);
+      button.setAttribute("aria-checked", "false");
+      button.addEventListener("click", event => seleccionarStarRating(widget, event, estrella));
+      widget.appendChild(button);
+    }
+
+    const valueLabel = document.createElement("span");
+    valueLabel.className = "star-rating-value";
+    widget.appendChild(valueLabel);
+    actualizarStarRating(widget, target.value);
+  });
+}
+
 function limpiarFeedback() {
   ["feedbackWifi", "feedbackColaboradores", "feedbackDispositivos"].forEach(id => {
     document.getElementById(id).value = "";
+    const widget = document.querySelector(`.star-rating-input[data-rating-target="${id}"]`);
+    if (widget) actualizarStarRating(widget, "");
   });
   document.getElementById("feedbackComentario").value = "";
   document.getElementById("feedbackStatus").textContent = "";
@@ -1518,6 +1588,8 @@ async function enviarFeedback(event) {
 // =======================
 // EVENTOS
 // =======================
+inicializarStarRatings();
+
 document.getElementById("btnCerrarModal").addEventListener("click", cerrarModal);
 document.getElementById("btnCancelarModal").addEventListener("click", cerrarModal);
 document.getElementById("btnConfirmarReserva").addEventListener("click", confirmarReserva);
@@ -1553,8 +1625,6 @@ document.getElementById("btnCerrarPanelAdmin").addEventListener("click", cerrarP
 document.getElementById("adminOverlay").addEventListener("click", e => {
   if (e.target === document.getElementById("adminOverlay")) cerrarPanelAdmin();
 });
-document.getElementById("tabFeedback").addEventListener("click", () => activarAdminTab("feedback"));
-document.getElementById("tabOpciones").addEventListener("click", () => activarAdminTab("opciones"));
 document.getElementById("btnRefrescarFeedback").addEventListener("click", renderPanelFeedback);
 document.getElementById("btnFeedbackToggle").addEventListener("click", () => {
   const abierto = document.getElementById("feedbackPanel").style.display !== "none";

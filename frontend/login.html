@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preload" as="image" href="Images/login-campus-1920.jpg">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=62">
+  <link rel="stylesheet" href="style.css?v=64">
 </head>
 <body class="login-page">
   <main class="login-shell">
@@ -26,8 +26,10 @@
 
         <div class="form-group">
           <label for="loginPassword">Password</label>
-          <input type="password" id="loginPassword" autocomplete="current-password">
-          <p class="caps-warning" id="capsWarning" style="display:none;">Mayúsculas activadas</p>
+          <div class="password-field">
+            <input type="password" id="loginPassword" autocomplete="current-password">
+            <span class="caps-warning" id="capsWarning" role="status" aria-label="Mayúsculas activadas" title="Mayúsculas activadas" hidden>⇪</span>
+          </div>
         </div>
 
         <p class="login-status" id="loginStatus" aria-live="polite"></p>
@@ -38,6 +40,6 @@
     </section>
   </main>
 
-  <script src="login.js?v=9"></script>
+  <script src="login.js?v=10"></script>
 </body>
 </html>

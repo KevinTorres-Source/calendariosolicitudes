@@ -8,13 +8,13 @@ const COORDINATOR_USERS = ["preescolar", "secundaria", "primaria"];
 
 function actualizarAvisoMayusculas(event) {
   if (!event.getModifierState) return;
-  capsWarning.style.display = event.getModifierState("CapsLock") ? "block" : "none";
+  capsWarning.hidden = !event.getModifierState("CapsLock");
 }
 
 passwordInput.addEventListener("keydown", actualizarAvisoMayusculas);
 passwordInput.addEventListener("keyup", actualizarAvisoMayusculas);
 passwordInput.addEventListener("blur", () => {
-  capsWarning.style.display = "none";
+  capsWarning.hidden = true;
 });
 
 async function sha256(texto) {

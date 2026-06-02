@@ -29,7 +29,7 @@ function cargarEnvLocal() {
 cargarEnvLocal();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const MAX_DISPOSITIVOS_POR_DIA = parseInt(process.env.MAX_DISPOSITIVOS_POR_DIA || "70", 10);
 const DEFAULT_SOLICITUDES_POR_HORA = parseInt(process.env.DEFAULT_SOLICITUDES_POR_HORA || "2", 10);
 const RESERVAS_FILE = path.join(__dirname, "reservas.json");
@@ -667,7 +667,7 @@ app.get("/feedback", requerirAdmin, (req, res) => {
 // POST feedback del servicio
 app.post("/feedback", (req, res) => {
   const { wifi, colaboradores, dispositivos, comentario } = req.body;
-  const valoresPermitidos = ["", "1", "2", "3", "4", "5"];
+  const valoresPermitidos = ["", "1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5"];
 
   if (![wifi, colaboradores, dispositivos].every(valor => valoresPermitidos.includes(String(valor || "")))) {
     return res.status(400).json({ error: "Calificacion invalida" });

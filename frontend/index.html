@@ -6,7 +6,7 @@
   <title>Calendario de Solicitudes - CABB</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=64">
+  <link rel="stylesheet" href="style.css?v=71">
 </head>
 <body>
 
@@ -50,6 +50,7 @@
         <div id="sessionUserBadge" class="session-user-badge" style="display:none;"></div>
         <div class="admin-panel">
           <button id="btnPanelAdmin" style="display:none;">Analytics</button>
+          <button id="btnSolicitudesRecientes" style="display:none;">Recent Requests</button>
           <button id="btnAdmin"><span aria-hidden="true">👤</span> Login</button>
           <button id="btnLogout" style="display:none;">Logout</button>
         </div>
@@ -128,6 +129,29 @@
       </div>
 
       <p class="admin-status" id="adminStatus" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <!-- RECENT REQUESTS -->
+  <div id="recentRequestsOverlay" class="admin-overlay" style="display:none;">
+    <section class="admin-dashboard recent-requests-dashboard" aria-label="Recent Requests">
+      <header class="admin-dashboard-header">
+        <div>
+          <h3>Recent Requests</h3>
+        </div>
+        <button class="admin-close" id="btnCerrarSolicitudesRecientes" type="button" aria-label="Close">x</button>
+      </header>
+
+      <div class="recent-requests-toolbar">
+        <div>
+          <span class="admin-panel-label">Latest activity</span>
+          <strong id="recentRequestsTotal">0 requests</strong>
+        </div>
+        <button class="admin-secondary" id="btnRefrescarSolicitudesRecientes" type="button">Refresh</button>
+      </div>
+
+      <div class="recent-requests-list" id="recentRequestsList"></div>
+      <p class="admin-status" id="recentRequestsStatus" aria-live="polite"></p>
     </section>
   </div>
 
@@ -293,6 +317,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=49"></script>
+  <script src="app.js?v=56"></script>
 </body>
 </html>

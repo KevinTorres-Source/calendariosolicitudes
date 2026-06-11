@@ -3,8 +3,11 @@ const API = window.location.port === "3000" ? window.location.origin : "http://l
 const passwordInput = document.getElementById("loginPassword");
 const capsWarning = document.getElementById("capsWarning");
 const ADMIN_PASSWORD_HASH = "82c290496e4e4d7a2b7140d5b6fab572d5addb286728e3917ecb3cd88f556a59";
-const COORDINATOR_PASSWORD_HASH = "dd41f9fc29cabe46adb1ed3d63a6770db9eca49152110e5ed84dab6b08e5d4de";
-const COORDINATOR_USERS = ["preescolar", "secundaria", "primaria"];
+const COORDINATOR_PASSWORD_HASHES = {
+  preescolar: "a0073899be76ab0f7125790781b97edc535f41a6f9cc499fea546a7155f77498",
+  secundaria: "160ba271a38f345c079f1d8efd6a125b4fa7ad8a77af9dc187fba140a780e053",
+  primaria: "8b2c3719321e10bd0ca29fa596ed3e71923869497533e57a3f30a3c16f831feb"
+};
 
 function actualizarAvisoMayusculas(event) {
   if (!event.getModifierState) return;
@@ -33,7 +36,7 @@ async function validarCredencialesLocales(usuario, password) {
     return { token: "admin-token-seguro", rol: "admin" };
   }
 
-  if (COORDINATOR_USERS.includes(username) && passwordHash === COORDINATOR_PASSWORD_HASH) {
+  if (COORDINATOR_PASSWORD_HASHES[username] && passwordHash === COORDINATOR_PASSWORD_HASHES[username]) {
     return { token: "coordinador-token-seguro", rol: "coordinador" };
   }
 

@@ -39,6 +39,18 @@ const LIMITES_SOLICITUDES_FILE = path.join(__dirname, "limites-solicitudes.json"
 const LIMITES_DISPOSITIVOS_FILE = path.join(__dirname, "limites-dispositivos.json");
 const ADMIN_CONFIG_FILE = path.join(__dirname, "admin-config.json");
 const COORDINATOR_TOKEN = "coordinador-token-seguro";
+const FESTIVOS_COLOMBIA = new Set([
+  "2026-06-29",
+  "2026-07-13",
+  "2026-07-20",
+  "2026-08-07",
+  "2026-08-17",
+  "2026-10-12",
+  "2026-11-02",
+  "2026-11-16",
+  "2026-12-08",
+  "2026-12-25"
+]);
 
 app.use(cors());
 app.use(express.json());
@@ -56,9 +68,9 @@ let adminConfig = {
   username: "admin",
   passwordHash: "$2b$10$IW1IobwePGQhsY2xNoULUu730tBSGQk15Eob8FNtqci3bzpTxa3G2",
   coordinators: [
-    { username: "preescolar", passwordHash: "$2b$10$eQwCaqFWcs6KpwvmXULEMe35xnbMJiYlRcbgQGQLuurrSV/hLXb7O" },
-    { username: "secundaria", passwordHash: "$2b$10$eQwCaqFWcs6KpwvmXULEMe35xnbMJiYlRcbgQGQLuurrSV/hLXb7O" },
-    { username: "primaria", passwordHash: "$2b$10$eQwCaqFWcs6KpwvmXULEMe35xnbMJiYlRcbgQGQLuurrSV/hLXb7O" }
+    { username: "preescolar", passwordHash: "$2b$10$P1qRgJW6qMQENNC51p5WTe/kOxSFzDuymGzniFftylhvMZFHsJBS6" },
+    { username: "secundaria", passwordHash: "$2b$10$ISTr3fZLpFaRswZuORGr2uJGUDBsz3shPoXIFL0bihf8WwQ2AHz32" },
+    { username: "primaria", passwordHash: "$2b$10$BUXJ2z.bak7eO1ngaufBOuRoKZa7gvJR.JTKHCJzBEvnNUe7tp8q2" }
   ]
 };
 
@@ -164,6 +176,10 @@ function fechaISO(fecha) {
   const month = String(fecha.getMonth() + 1).padStart(2, "0");
   const day = String(fecha.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function esFestivoColombia(fecha) {
+  return FESTIVOS_COLOMBIA.has(String(fecha || ""));
 }
 
 function obtenerInicioSemana(fecha) {
@@ -393,6 +409,10 @@ function validarSolicitudReserva({ fecha, hour, equipo, usuario, cantidad, corre
     return { error: "Solo puedes agendar en la semana actual o la siguiente." };
   }
 
+  if (esFestivoColombia(fecha)) {
+    return { error: "No se pueden hacer solicitudes en festivos." };
+  }
+
   if (!correoInstitucionalValido(correo)) {
     return { error: "El correo debe pertenecer al dominio @colamericano.edu.co" };
   }
@@ -466,6 +486,20 @@ app.get("/config", (req, res) => {
 // GET reservas
 app.get("/reservas", (req, res) => {
   res.json(reservas);
+});
+
+// GET solicitudes recientes (solo admin)
+app.get("/reservas/recientes", requerirAdmin, (req, res) => {
+  const limite = Math.min(Math.max(parseInt(req.query.limit || "20", 10) || 20, 1), 100);
+  const recientes = [...reservas]
+    .sort((a, b) => {
+      const fechaA = Date.parse(a.creadoEn || "") || parseInt(a.id, 10) || 0;
+      const fechaB = Date.parse(b.creadoEn || "") || parseInt(b.id, 10) || 0;
+      return fechaB - fechaA;
+    })
+    .slice(0, limite);
+
+  res.json(recientes);
 });
 
 // POST validar reserva sin guardarla

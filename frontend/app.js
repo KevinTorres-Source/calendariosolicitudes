@@ -35,6 +35,18 @@ const hours = [
 ];
 
 const mesesMini = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const festivosColombia = new Set([
+  "2026-06-29",
+  "2026-07-13",
+  "2026-07-20",
+  "2026-08-07",
+  "2026-08-17",
+  "2026-10-12",
+  "2026-11-02",
+  "2026-11-16",
+  "2026-12-08",
+  "2026-12-25"
+]);
 
 function esMismaFecha(a, b) {
   return a.getFullYear() === b.getFullYear() &&
@@ -47,6 +59,10 @@ function fechaISO(fecha) {
   const month = String(fecha.getMonth() + 1).padStart(2, "0");
   const day = String(fecha.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function esFestivoColombia(fecha) {
+  return festivosColombia.has(String(fecha || ""));
 }
 
 function obtenerFechaSemanaEscolar(fecha) {
@@ -251,6 +267,7 @@ async function obtenerLimitesDispositivos() {
 
 async function crearReservaAPI(payload) {
   const reservas = leerReservasLocal();
+  if (esFestivoColombia(payload.fecha)) return { error: "No se pueden hacer solicitudes en festivos." };
   const limiteHorario = validarLimiteSolicitudesHorario(reservas, payload.fecha, payload.hour);
   if (limiteHorario.error) return { error: limiteHorario.error };
   const bloqueos = leerBloqueosLocal();
@@ -295,6 +312,7 @@ async function crearReservaAPI(payload) {
 
 async function validarReservaAPI(payload) {
   const reservas = leerReservasLocal();
+  if (esFestivoColombia(payload.fecha)) return { error: "No se pueden hacer solicitudes en festivos." };
   const limiteHorario = validarLimiteSolicitudesHorario(reservas, payload.fecha, payload.hour);
   if (limiteHorario.error) return { error: limiteHorario.error };
   const bloqueos = leerBloqueosLocal();
@@ -377,6 +395,28 @@ async function obtenerFeedbackAdmin() {
   }
 
   return leerFeedbackLocal();
+}
+
+async function obtenerSolicitudesRecientesAdmin(limite = 20) {
+  if (backendDisponible) {
+    try {
+      const res = await fetch(`${API}/reservas/recientes?limit=${limite}`, {
+        headers: { "Authorization": token || "" }
+      });
+      const data = await res.json();
+      if (data.error) return data;
+      if (Array.isArray(data)) return data;
+    } catch {}
+  }
+
+  return leerReservasLocal()
+    .slice()
+    .sort((a, b) => {
+      const fechaB = Date.parse(b.creadoEn || "") || parseInt(b.id, 10) || 0;
+      const fechaA = Date.parse(a.creadoEn || "") || parseInt(a.id, 10) || 0;
+      return fechaB - fechaA;
+    })
+    .slice(0, limite);
 }
 
 async function desbloquearAPI(bloqueoId) {
@@ -484,6 +524,7 @@ function logout() {
   localStorage.removeItem("modoAdmin");
   actualizarBotonesAdmin();
   cerrarPanelAdmin();
+  cerrarSolicitudesRecientes();
   renderSemana();
 }
 
@@ -492,6 +533,7 @@ function actualizarBotonesAdmin() {
   const sessionUserBadge = document.getElementById("sessionUserBadge");
   document.getElementById("btnAdmin").style.display  = sesionActiva ? "none"  : "block";
   document.getElementById("btnPanelAdmin").style.display = modoAdmin ? "block" : "none";
+  document.getElementById("btnSolicitudesRecientes").style.display = modoAdmin ? "block" : "none";
   document.getElementById("btnLogout").style.display = sesionActiva ? "block" : "none";
   sessionUserBadge.style.display = sesionActiva ? "block" : "none";
   sessionUserBadge.textContent = (usuarioSesion || rol).toUpperCase();
@@ -740,12 +782,17 @@ async function renderSemana() {
       fecha.getMonth() === mesSeleccionado &&
       fecha.getFullYear() === yearSeleccionado;
     const disponibleParaProfesor = estaEnVentanaReservaProfesor(fecha);
+    const esFestivo = esFestivoColombia(fechaStr);
 
     const bloqueadoDiaCompleto = bloqueos.find(b => b.fecha === fechaStr && b.hour === null);
 
     const col = document.createElement("div");
     col.className = "day-column";
     if (!perteneceAlMesSeleccionado) col.classList.add("outside-month");
+    if (perteneceAlMesSeleccionado && esFestivo) col.classList.add("holiday-day");
+    if (perteneceAlMesSeleccionado && !tieneReservaExtendida() && !disponibleParaProfesor) {
+      col.classList.add("out-of-time-day");
+    }
 
     const h4 = document.createElement("h4");
     h4.className = "day-column-header";
@@ -819,12 +866,28 @@ async function renderSemana() {
       const limiteHorario = obtenerLimiteSolicitudesPorHora(fechaStr);
       const solicitudesUsadas = reservasHorario.length;
 
-      if (!tieneReservaExtendida() && !disponibleParaProfesor) {
-        cell.classList.add("no-disponible");
+      if (esFestivo) {
+        cell.classList.add("holiday");
         cell.innerHTML = `
           <div class="cell-row cell-row-top">
             <span class="cell-hora">${hour}</span>
-            <span class="cell-libre">Not available</span>
+            <span class="cell-libre">Holiday</span>
+          </div>
+          ${reservasHorario.length ? `
+            <div class="cell-row cell-row-info">
+              <div class="cell-reservas">${renderReservasHorario(reservasHorario)}</div>
+              <span class="cell-detalle">📋 ${solicitudesUsadas}/${limiteHorario}</span>
+            </div>` : ""}`;
+        col.appendChild(cell);
+        return;
+      }
+
+      if (!tieneReservaExtendida() && !disponibleParaProfesor) {
+        cell.classList.add("out-of-time");
+        cell.innerHTML = `
+          <div class="cell-row cell-row-top">
+            <span class="cell-hora">${hour}</span>
+            <span class="cell-libre">Out of time</span>
           </div>
           ${reservasHorario.length ? `
             <div class="cell-row cell-row-info">
@@ -867,10 +930,11 @@ async function renderSemana() {
         cell.innerHTML = `
           <div class="cell-row cell-row-top">
             <span class="cell-hora">${hour}</span>
-            <span class="cell-detalle">📋 ${solicitudesUsadas}/${limiteHorario}</span>
+            <span class="cell-libre">Not available</span>
           </div>
           <div class="cell-row cell-row-info">
             <div class="cell-reservas">${renderReservasHorario(reservasHorario)}</div>
+            <span class="cell-detalle">📋 ${solicitudesUsadas}/${limiteHorario}</span>
           </div>`;
         if (modoAdmin) {
           cell.style.cursor = "pointer";
@@ -878,6 +942,7 @@ async function renderSemana() {
         }
       } else {
         cell.classList.add("disponible");
+        if (solicitudesUsadas > 0) cell.classList.add("con-solicitud");
         const textoCupo = `${solicitudesUsadas}/${limiteHorario}`;
         cell.innerHTML = `
           <div class="cell-row cell-row-top">
@@ -1264,6 +1329,86 @@ async function abrirPanelAdmin() {
   await renderPanelFeedback();
 }
 
+function cerrarSolicitudesRecientes() {
+  document.getElementById("recentRequestsOverlay").style.display = "none";
+}
+
+async function abrirSolicitudesRecientes() {
+  if (!modoAdmin) return;
+  document.getElementById("recentRequestsOverlay").style.display = "flex";
+  await renderSolicitudesRecientes();
+}
+
+function formatearFechaHoraCreacion(valor) {
+  const fecha = new Date(valor);
+  if (Number.isNaN(fecha.getTime())) return "Creation time unavailable";
+
+  return fecha.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function obtenerEstadoSolicitud(reserva) {
+  const estado = String(reserva.estado || "approved").toLowerCase();
+  if (estado === "rechazado") return { label: "Rejected", className: "rejected" };
+  if (estado === "pendiente") return { label: "Pending", className: "pending" };
+  return { label: "Approved", className: "approved" };
+}
+
+function renderSolicitudReciente(reserva) {
+  const estado = obtenerEstadoSolicitud(reserva);
+  const fecha = escaparHTML(reserva.fecha || "No date");
+  const hora = escaparHTML(reserva.hour || "No time");
+  const nombre = escaparHTML(reserva.usuario || "Unknown user");
+  const mensaje = `${nombre} has made a request for ${fecha} - ${hora}.`;
+
+  return `
+    <article class="recent-request-item">
+      <div class="recent-request-main">
+        <p>${mensaje}</p>
+        <time>${escaparHTML(formatearFechaHoraCreacion(reserva.creadoEn))}</time>
+      </div>
+      <div class="recent-request-meta">
+        <span class="recent-request-pill ${estado.className}">${estado.label}</span>
+        <span>${escaparHTML(reserva.cantidad || "0")} iPads</span>
+        <span>Course ${escaparHTML(reserva.curso || "N/A")}</span>
+      </div>
+      ${reserva.nota ? `<p class="recent-request-note">${escaparHTML(reserva.nota)}</p>` : ""}
+    </article>`;
+}
+
+async function renderSolicitudesRecientes() {
+  const status = document.getElementById("recentRequestsStatus");
+  const lista = document.getElementById("recentRequestsList");
+  const total = document.getElementById("recentRequestsTotal");
+
+  status.textContent = "Loading recent requests...";
+  lista.innerHTML = "";
+  total.textContent = "0 requests";
+
+  const data = await obtenerSolicitudesRecientesAdmin(20);
+  if (data.error) {
+    status.textContent = data.error;
+    return;
+  }
+
+  const solicitudes = Array.isArray(data) ? data : [];
+  total.textContent = `${solicitudes.length} ${solicitudes.length === 1 ? "request" : "requests"}`;
+
+  if (!solicitudes.length) {
+    lista.innerHTML = '<p class="admin-empty">No requests have been recorded yet.</p>';
+    status.textContent = "No recent requests.";
+    return;
+  }
+
+  lista.innerHTML = solicitudes.map(renderSolicitudReciente).join("");
+  status.textContent = "Recent requests updated.";
+}
+
 function calcularMetricasFeedback(feedback) {
   const conteosGenerales = Object.fromEntries(feedbackRatingValues.map(valor => [valor, 0]));
   const tendencia = feedback
@@ -1600,6 +1745,7 @@ document.getElementById("modalOverlay").addEventListener("click", e => {
 });
 document.getElementById("btnAdmin").addEventListener("click", loginAdmin);
 document.getElementById("btnPanelAdmin").addEventListener("click", abrirPanelAdmin);
+document.getElementById("btnSolicitudesRecientes").addEventListener("click", abrirSolicitudesRecientes);
 document.getElementById("btnLogout").addEventListener("click", logout);
 document.getElementById("btnCerrarConfirmacionAdmin").addEventListener("click", cerrarConfirmacionAdmin);
 document.getElementById("btnCancelarConfirmacionAdmin").addEventListener("click", cerrarConfirmacionAdmin);
@@ -1626,6 +1772,11 @@ document.getElementById("adminOverlay").addEventListener("click", e => {
   if (e.target === document.getElementById("adminOverlay")) cerrarPanelAdmin();
 });
 document.getElementById("btnRefrescarFeedback").addEventListener("click", renderPanelFeedback);
+document.getElementById("btnCerrarSolicitudesRecientes").addEventListener("click", cerrarSolicitudesRecientes);
+document.getElementById("recentRequestsOverlay").addEventListener("click", e => {
+  if (e.target === document.getElementById("recentRequestsOverlay")) cerrarSolicitudesRecientes();
+});
+document.getElementById("btnRefrescarSolicitudesRecientes").addEventListener("click", renderSolicitudesRecientes);
 document.getElementById("btnFeedbackToggle").addEventListener("click", () => {
   const abierto = document.getElementById("feedbackPanel").style.display !== "none";
   setFeedbackAbierto(!abierto);

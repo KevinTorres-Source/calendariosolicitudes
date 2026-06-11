@@ -461,7 +461,7 @@ body {
   box-shadow: none;
 }
 
-#btnAdmin, #btnPanelAdmin, #btnLogout {
+#btnAdmin, #btnPanelAdmin, #btnSolicitudesRecientes, #btnLogout {
   background: rgba(255,255,255,0.1);
   color: #ffffff;
   border: 1px solid rgba(255,255,255,0.2);
@@ -476,7 +476,7 @@ body {
   text-align: center;
 }
 
-#btnAdmin:hover, #btnPanelAdmin:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.28); }
+#btnAdmin:hover, #btnPanelAdmin:hover, #btnSolicitudesRecientes:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.28); }
 #btnLogout       { background: transparent; border-color: rgba(255,255,255,0.2); color: #ffffff; }
 #btnLogout:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.3); }
 
@@ -665,6 +665,29 @@ body {
   color: #ffffff;
 }
 
+.day-column.out-of-time-day {
+  background: #f5f7fb;
+  border-color: #e4e9f2;
+  opacity: 0.82;
+}
+
+.day-column.out-of-time-day h4 {
+  background: #7a8798;
+  color: #ffffff;
+}
+
+.day-column.holiday-day {
+  background: #f5f7fb;
+  border-color: #e4e9f2;
+  opacity: 0.92;
+}
+
+.day-column.holiday-day h4 {
+  background: #7a8798;
+  color: #ffffff;
+  box-shadow: inset 0 -3px 0 #F08C28;
+}
+
 /* ======================
    CELDAS
 ====================== */
@@ -717,6 +740,16 @@ body {
 
 .disponible       { background: #f8fff8; }
 .disponible:hover { background: #e8f5e8; }
+.disponible.con-solicitud {
+  background: #eef1f5;
+  border-left: 4px solid #c7d0dc;
+}
+.disponible.con-solicitud:hover {
+  background: #e5eaf0;
+}
+.disponible.con-solicitud .cell-libre {
+  color: #667085;
+}
 .fuera-mes {
   background: #f5f7fb;
   color: #98a2b3;
@@ -726,14 +759,54 @@ body {
 .fuera-mes .cell-libre {
   color: #98a2b3;
 }
-.no-disponible {
+.out-of-time {
   background: #f3f4f6;
   color: #9aa3b2;
   cursor: not-allowed;
 }
-.no-disponible .cell-hora,
-.no-disponible .cell-libre {
+.out-of-time .cell-hora,
+.out-of-time .cell-libre {
   color: #9aa3b2;
+}
+.holiday {
+  background: #eef1f5;
+  color: #667085;
+  border-left: 4px solid #F08C28;
+  cursor: not-allowed;
+}
+.holiday .cell-hora,
+.holiday .cell-libre,
+.holiday .cell-reserva-persona,
+.holiday .cell-reserva-ipads {
+  color: #667085;
+}
+.holiday .cell-libre {
+  font-weight: 800;
+}
+.no-disponible {
+  background: #3f4650;
+  color: #f4f6f8;
+  border-top-color: #59616d;
+  border-left: 4px solid #242a32;
+  cursor: not-allowed;
+}
+.no-disponible.con-solicitud {
+  background: #3f4650;
+  border-left-color: #242a32;
+  color: #f4f6f8;
+}
+.no-disponible .cell-hora,
+.no-disponible .cell-libre,
+.no-disponible .cell-reserva-persona,
+.no-disponible .cell-reserva-ipads {
+  color: #f4f6f8;
+}
+.no-disponible .cell-detalle {
+  color: #242a32;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-weight: 800;
 }
 .pendiente        { background: #fffbea; cursor: default; }
 .aprobado         { background: #edfaed; cursor: default; }
@@ -759,6 +832,7 @@ body {
   cursor: default;
 }
 .sin-cupo .cell-hora,
+.sin-cupo .cell-libre,
 .sin-cupo .cell-reserva-persona,
 .sin-cupo .cell-reserva-ipads {
   color: #f4f6f8;
@@ -1502,6 +1576,118 @@ body {
   margin: 10px 0 0;
 }
 
+.recent-requests-dashboard {
+  width: min(760px, 100%);
+}
+
+.recent-requests-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(28,65,105,0.06);
+}
+
+.recent-requests-toolbar strong {
+  display: block;
+  color: #1C4169;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.recent-requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recent-request-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(28,65,105,0.06);
+}
+
+.recent-request-main {
+  min-width: 0;
+}
+
+.recent-request-main p {
+  margin: 0;
+  color: #1C4169;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.recent-request-main time {
+  display: block;
+  margin-top: 6px;
+  color: #98a2b3;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.recent-request-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-content: flex-start;
+  gap: 6px;
+  max-width: 240px;
+}
+
+.recent-request-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475467;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.recent-request-pill.approved {
+  background: #e8f7ee;
+  color: #197a44;
+}
+
+.recent-request-pill.pending {
+  background: #fff6df;
+  color: #b54708;
+}
+
+.recent-request-pill.rejected {
+  background: #ffe7e7;
+  color: #b42318;
+}
+
+.recent-request-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid #eef2f7;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .admin-status {
   min-height: 18px;
   margin: 14px 0 0;
@@ -1906,6 +2092,20 @@ body {
   .feedback-toggle {
     width: 100%;
   }
+
+  .recent-request-item {
+    grid-template-columns: 1fr;
+  }
+
+  .recent-requests-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recent-request-meta {
+    justify-content: flex-start;
+    max-width: none;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -1979,7 +2179,7 @@ body {
   .admin-panel {
     padding-top: 12px;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .session-user-badge {
@@ -2065,6 +2265,7 @@ body {
 
   #btnAdmin,
   #btnPanelAdmin,
+  #btnSolicitudesRecientes,
   #btnLogout {
     border-radius: 12px;
   }

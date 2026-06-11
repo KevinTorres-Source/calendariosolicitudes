@@ -1,4 +1,18 @@
 {
   "username": "admin",
-  "passwordHash": "$2b$10$IW1IobwePGQhsY2xNoULUu730tBSGQk15Eob8FNtqci3bzpTxa3G2"
+  "passwordHash": "$2b$10$IW1IobwePGQhsY2xNoULUu730tBSGQk15Eob8FNtqci3bzpTxa3G2",
+  "coordinators": [
+    {
+      "username": "preescolar",
+      "passwordHash": "$2b$10$P1qRgJW6qMQENNC51p5WTe/kOxSFzDuymGzniFftylhvMZFHsJBS6"
+    },
+    {
+      "username": "secundaria",
+      "passwordHash": "$2b$10$ISTr3fZLpFaRswZuORGr2uJGUDBsz3shPoXIFL0bihf8WwQ2AHz32"
+    },
+    {
+      "username": "primaria",
+      "passwordHash": "$2b$10$BUXJ2z.bak7eO1ngaufBOuRoKZa7gvJR.JTKHCJzBEvnNUe7tp8q2"
+    }
+  ]
 }

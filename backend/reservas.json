@@ -84,5 +84,61 @@
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Prueba 4",
     "estado": "rechazado"
+  },
+  {
+    "id": 1780414592397,
+    "creadoEn": "2026-06-02T15:36:32.397Z",
+    "clientRequestId": "3be2005d-f0de-4602-9612-743da2e50b96",
+    "fecha": "2026-06-04",
+    "hour": "10:35-11:25",
+    "equipo": "32 iPads · 403",
+    "usuario": "Javier Isaza",
+    "curso": "403",
+    "cantidad": 32,
+    "correo": "desarrolloinformatico@colamericano.edu.co",
+    "nota": "PLENO math",
+    "estado": "aprobado"
+  },
+  {
+    "id": 1781098929822,
+    "creadoEn": "2026-06-10T13:42:09.822Z",
+    "clientRequestId": "f26c4767-78cf-4696-998e-2ddfe0628db0",
+    "fecha": "2026-12-01",
+    "hour": "07:15-08:00",
+    "equipo": "14 iPads · 5",
+    "usuario": "Primaria",
+    "curso": "5",
+    "cantidad": 14,
+    "correo": "prueba@colamericano.edu.co",
+    "nota": "Prueba",
+    "estado": "aprobado"
+  },
+  {
+    "id": 1781100355670,
+    "creadoEn": "2026-06-10T14:05:55.670Z",
+    "clientRequestId": "404970f8-dc53-4481-8707-e1d404f4de45",
+    "fecha": "2026-12-01",
+    "hour": "07:15-08:00",
+    "equipo": "20 iPads · 10",
+    "usuario": "Secundaria",
+    "curso": "10",
+    "cantidad": 20,
+    "correo": "prueba@colamericano.edu.co",
+    "nota": "prueba secundaria",
+    "estado": "aprobado"
+  },
+  {
+    "id": 1781100429630,
+    "creadoEn": "2026-06-10T14:07:09.630Z",
+    "clientRequestId": "2e4d6852-4232-4ef5-a5c7-b07cbd6798bf",
+    "fecha": "2026-12-01",
+    "hour": "08:00-08:45",
+    "equipo": "14 iPads · 4",
+    "usuario": "Preescolar Ejemplo",
+    "curso": "4",
+    "cantidad": 14,
+    "correo": "ejemplo@colamericano.edu.co",
+    "nota": "Preescolar ejemplo",
+    "estado": "aprobado"
   }
 ]

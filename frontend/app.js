@@ -93,9 +93,13 @@ function obtenerInicioSemana(fecha) {
 }
 
 function estaEnVentanaReservaProfesor(fecha) {
-  const inicio = obtenerInicioSemana(hoy);
-  const fin = new Date(inicio);
-  fin.setDate(inicio.getDate() + 13);
+  const inicioSemana = obtenerInicioSemana(hoy);
+  const inicio = new Date(hoy);
+  inicio.setHours(0, 0, 0, 0);
+  inicio.setDate(inicio.getDate() + 1);
+
+  const fin = new Date(inicioSemana);
+  fin.setDate(inicioSemana.getDate() + 13);
   fin.setHours(23, 59, 59, 999);
 
   const objetivo = new Date(fecha);

@@ -2214,6 +2214,7 @@ body {
 @media (max-width: 700px) {
   .container {
     min-height: 100dvh;
+    padding-bottom: 76px;
   }
 
   .sidebar {
@@ -2254,9 +2255,26 @@ body {
     margin-right: auto;
   }
 
+  .sidebar-session {
+    position: fixed;
+    left: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 920;
+    width: calc(50vw - 15px);
+    margin: 0;
+    pointer-events: none;
+  }
+
+  .session-user-badge {
+    display: none !important;
+  }
+
   .admin-panel {
     grid-template-columns: 1fr;
-    gap: 7px;
+    gap: 5px;
+    padding: 0;
+    border-top: 0;
+    pointer-events: auto;
   }
 
   .admin-summary-grid {
@@ -2267,7 +2285,11 @@ body {
   #btnPanelAdmin,
   #btnSolicitudesRecientes,
   #btnLogout {
-    border-radius: 12px;
+    min-height: 38px;
+    padding: 8px 9px;
+    border-radius: 10px;
+    font-size: 11px;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.16);
   }
 
   .main {
@@ -2293,8 +2315,38 @@ body {
   #calendar {
     min-height: 560px;
     gap: 10px;
-    padding-bottom: 12px;
+    padding-bottom: 86px;
     scroll-snap-type: x proximity;
+  }
+
+  .feedback-widget {
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 930;
+    width: calc(50vw - 15px);
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .feedback-toggle {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 9px;
+    border-radius: 10px;
+    font-size: 11px;
+    line-height: 1.15;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.16);
+  }
+
+  .feedback-panel {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(58px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: min(68vh, 520px);
+    overflow-y: auto;
+    padding: 14px;
   }
 
   .day-column {

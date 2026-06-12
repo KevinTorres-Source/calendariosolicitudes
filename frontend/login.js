@@ -1,4 +1,14 @@
-const API = window.location.port === "3000" ? window.location.origin : "http://localhost:3000";
+function obtenerAPIBase() {
+  const apiConfigurada = window.API_BASE_URL || document.querySelector('meta[name="api-base-url"]')?.content;
+  if (apiConfigurada) return String(apiConfigurada).replace(/\/$/, "");
+
+  const hostLocal = ["localhost", "127.0.0.1", ""].includes(window.location.hostname);
+  if (hostLocal && window.location.port !== "3000") return "http://localhost:3000";
+
+  return window.location.origin;
+}
+
+const API = obtenerAPIBase();
 
 const passwordInput = document.getElementById("loginPassword");
 const capsWarning = document.getElementById("capsWarning");

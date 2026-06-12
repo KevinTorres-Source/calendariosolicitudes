@@ -1,4 +1,15 @@
-const API = window.location.port === "3000" ? window.location.origin : "http://localhost:3000";
+function obtenerAPIBase() {
+  const apiConfigurada = window.API_BASE_URL || document.querySelector('meta[name="api-base-url"]')?.content;
+  if (apiConfigurada) return String(apiConfigurada).replace(/\/$/, "");
+
+  const hostLocal = ["localhost", "127.0.0.1", ""].includes(window.location.hostname);
+  if (hostLocal && window.location.port !== "3000") return "http://localhost:3000";
+
+  return window.location.origin;
+}
+
+const API = obtenerAPIBase();
+const permiteFallbackLocal = ["localhost", "127.0.0.1", ""].includes(window.location.hostname);
 
 const hoy = new Date();
 let fechaActual = new Date();
@@ -230,6 +241,7 @@ async function obtenerReservas() {
       }
     } catch {}
   }
+  if (!permiteFallbackLocal) return [];
   return leerReservasLocal();
 }
 
@@ -270,6 +282,10 @@ async function obtenerLimitesDispositivos() {
 }
 
 async function crearReservaAPI(payload) {
+  if (!backendDisponible && !permiteFallbackLocal) {
+    return { error: "No se pudo conectar con el servidor. Intenta de nuevo." };
+  }
+
   const reservas = leerReservasLocal();
   if (esFestivoColombia(payload.fecha)) return { error: "No se pueden hacer solicitudes en festivos." };
   const limiteHorario = validarLimiteSolicitudesHorario(reservas, payload.fecha, payload.hour);
@@ -298,7 +314,11 @@ async function crearReservaAPI(payload) {
       const data = await res.json();
       if (data.error) return data;
       nueva = data.reserva || nueva;
-    } catch {}
+    } catch {
+      if (!permiteFallbackLocal) {
+        return { error: "No se pudo guardar la solicitud porque el servidor no respondió." };
+      }
+    }
   }
 
   const existenteIndex = reservas.findIndex(reserva =>
@@ -315,6 +335,10 @@ async function crearReservaAPI(payload) {
 }
 
 async function validarReservaAPI(payload) {
+  if (!backendDisponible && !permiteFallbackLocal) {
+    return { error: "No se pudo conectar con el servidor. Intenta de nuevo." };
+  }
+
   const reservas = leerReservasLocal();
   if (esFestivoColombia(payload.fecha)) return { error: "No se pueden hacer solicitudes en festivos." };
   const limiteHorario = validarLimiteSolicitudesHorario(reservas, payload.fecha, payload.hour);
@@ -334,7 +358,11 @@ async function validarReservaAPI(payload) {
       });
       const data = await res.json();
       if (data.error) return data;
-    } catch {}
+    } catch {
+      if (!permiteFallbackLocal) {
+        return { error: "No se pudo validar la solicitud porque el servidor no respondió." };
+      }
+    }
   }
 
   return { message: "OK" };
@@ -452,7 +480,11 @@ async function guardarLimiteSolicitudesAPI(fecha, limite) {
       });
       const data = await res.json();
       if (data.error) return data;
-    } catch {}
+    } catch {
+      if (!permiteFallbackLocal) {
+        return { error: "No se pudo guardar el limite porque el servidor no respondió." };
+      }
+    }
   }
 
   limites.push(nuevo);
@@ -469,7 +501,11 @@ async function restablecerLimiteSolicitudesAPI(fecha) {
       });
       const data = await res.json();
       if (data.error) return data;
-    } catch {}
+    } catch {
+      if (!permiteFallbackLocal) {
+        return { error: "No se pudo validar la solicitud porque el servidor no respondió." };
+      }
+    }
   }
 
   guardarLimitesSolicitudesLocal(leerLimitesSolicitudesLocal().filter(item => item.fecha !== fecha));

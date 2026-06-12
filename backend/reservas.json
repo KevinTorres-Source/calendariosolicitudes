@@ -140,5 +140,19 @@
     "correo": "ejemplo@colamericano.edu.co",
     "nota": "Preescolar ejemplo",
     "estado": "aprobado"
+  },
+  {
+    "id": 1781198366352,
+    "creadoEn": "2026-06-11T17:19:26.352Z",
+    "clientRequestId": "fa57cd41-4be7-4a93-8d16-89748646cdf2",
+    "fecha": "2026-06-12",
+    "hour": "07:15-08:00",
+    "equipo": "21 iPads · 21",
+    "usuario": "prueba",
+    "curso": "21",
+    "cantidad": 21,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "nota": "Prueba",
+    "estado": "rechazado"
   }
 ]

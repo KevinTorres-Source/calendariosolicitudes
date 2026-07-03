@@ -4,15 +4,15 @@
   "coordinators": [
     {
       "username": "preescolar",
-      "passwordHash": "$2b$10$P1qRgJW6qMQENNC51p5WTe/kOxSFzDuymGzniFftylhvMZFHsJBS6"
+      "passwordHash": "$2b$10$iJ6pywklxN9BdxAK/qa5SunlobQyPKp8uGqcHy6ZIpPCyu7en0hLy"
     },
     {
       "username": "secundaria",
-      "passwordHash": "$2b$10$ISTr3fZLpFaRswZuORGr2uJGUDBsz3shPoXIFL0bihf8WwQ2AHz32"
+      "passwordHash": "$2b$10$NF5EprQpDmxgXsiQpBO1Ku6HrNl0AvYOvbCH71uJ8QEd4Npav7OWm"
     },
     {
       "username": "primaria",
-      "passwordHash": "$2b$10$BUXJ2z.bak7eO1ngaufBOuRoKZa7gvJR.JTKHCJzBEvnNUe7tp8q2"
+      "passwordHash": "$2b$10$wcLD3/XpbG6Oo.Fu64BTFOLdz7fxqKdEwsdjyiYBtzXUs1wZwk2xa"
     }
   ]
 }

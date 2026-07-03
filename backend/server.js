@@ -3,6 +3,8 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 function cargarEnvLocal() {
   const envPath = path.join(__dirname, ".env");
@@ -38,7 +40,11 @@ const FEEDBACK_FILE = path.join(__dirname, "feedback.json");
 const LIMITES_SOLICITUDES_FILE = path.join(__dirname, "limites-solicitudes.json");
 const LIMITES_DISPOSITIVOS_FILE = path.join(__dirname, "limites-dispositivos.json");
 const ADMIN_CONFIG_FILE = path.join(__dirname, "admin-config.json");
-const COORDINATOR_TOKEN = "coordinador-token-seguro";
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
+const TOKEN_EXPIRES_IN = process.env.TOKEN_EXPIRES_IN || "8h";
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+const loginAttempts = new Map();
 const FESTIVOS_COLOMBIA = new Set([
   "2026-06-29",
   "2026-07-13",
@@ -51,9 +57,29 @@ const FESTIVOS_COLOMBIA = new Set([
   "2026-12-08",
   "2026-12-25"
 ]);
+const SECCIONES_PERMITIDAS = new Set([
+  "Sección Preescolar y 1º",
+  "Sección Primaria y 6º",
+  "Sección Secundaria y Media"
+]);
 
-app.use(cors());
-app.use(express.json());
+if (!process.env.JWT_SECRET) {
+  console.warn("JWT_SECRET no configurado; los tokens se invalidaran al reiniciar el servidor.");
+}
+
+const corsOrigins = String(process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+app.disable("x-powered-by");
+app.use(cors(corsOrigins.length ? { origin: corsOrigins } : undefined));
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "same-origin");
+  next();
+});
+app.use(express.json({ limit: "50kb" }));
 app.use(express.static(path.join(__dirname, "../frontend")));
 
 // =======================
@@ -66,12 +92,8 @@ let limitesSolicitudes = [];
 let limitesDispositivos = [];
 let adminConfig = {
   username: "admin",
-  passwordHash: "$2b$10$IW1IobwePGQhsY2xNoULUu730tBSGQk15Eob8FNtqci3bzpTxa3G2",
-  coordinators: [
-    { username: "preescolar", passwordHash: "$2b$10$P1qRgJW6qMQENNC51p5WTe/kOxSFzDuymGzniFftylhvMZFHsJBS6" },
-    { username: "secundaria", passwordHash: "$2b$10$ISTr3fZLpFaRswZuORGr2uJGUDBsz3shPoXIFL0bihf8WwQ2AHz32" },
-    { username: "primaria", passwordHash: "$2b$10$BUXJ2z.bak7eO1ngaufBOuRoKZa7gvJR.JTKHCJzBEvnNUe7tp8q2" }
-  ]
+  passwordHash: "",
+  coordinators: []
 };
 
 try {
@@ -156,19 +178,77 @@ function correoInstitucionalValido(correo) {
   return /^[^\s@]+@colamericano\.edu\.co$/i.test(String(correo || "").trim());
 }
 
+function obtenerTokenAutorizacion(req) {
+  const authHeader = String(req.headers["authorization"] || "").trim();
+  if (!authHeader) return "";
+  return authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : authHeader;
+}
+
+function crearTokenSesion({ rol, usuario }) {
+  return jwt.sign({ rol, usuario }, JWT_SECRET, {
+    expiresIn: TOKEN_EXPIRES_IN,
+    issuer: "calendario-solicitudes"
+  });
+}
+
+function verificarTokenSesion(req) {
+  const token = obtenerTokenAutorizacion(req);
+  if (!token) return null;
+
+  try {
+    return jwt.verify(token, JWT_SECRET, { issuer: "calendario-solicitudes" });
+  } catch {
+    return null;
+  }
+}
+
 function obtenerRolDesdeToken(req) {
-  const authHeader = req.headers["authorization"];
-  if (authHeader === "admin-token-seguro") return "admin";
-  if (authHeader === COORDINATOR_TOKEN) return "coordinador";
+  const sesion = verificarTokenSesion(req);
+  if (sesion?.rol === "admin") return "admin";
+  if (sesion?.rol === "coordinador") return "coordinador";
   return "profesor";
 }
 
 function requerirAdmin(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  if (authHeader !== "admin-token-seguro") {
+  const sesion = verificarTokenSesion(req);
+  if (sesion?.rol !== "admin") {
     return res.status(401).json({ error: "No autorizado" });
   }
   next();
+}
+
+function obtenerClaveLogin(req, username) {
+  return `${req.ip || req.socket?.remoteAddress || "unknown"}:${String(username || "").trim().toLowerCase()}`;
+}
+
+function loginBloqueado(req, username) {
+  const clave = obtenerClaveLogin(req, username);
+  const ahora = Date.now();
+  const intento = loginAttempts.get(clave);
+
+  if (!intento || ahora - intento.inicio > LOGIN_WINDOW_MS) {
+    loginAttempts.set(clave, { conteo: 0, inicio: ahora });
+    return false;
+  }
+
+  return intento.conteo >= LOGIN_MAX_ATTEMPTS;
+}
+
+function registrarLoginFallido(req, username) {
+  const clave = obtenerClaveLogin(req, username);
+  const ahora = Date.now();
+  const intento = loginAttempts.get(clave);
+
+  if (!intento || ahora - intento.inicio > LOGIN_WINDOW_MS) {
+    loginAttempts.set(clave, { conteo: 1, inicio: ahora });
+    return;
+  }
+
+  intento.conteo += 1;
+}
+
+function limpiarIntentosLogin(req, username) {
+  loginAttempts.delete(obtenerClaveLogin(req, username));
 }
 
 function fechaISO(fecha) {
@@ -269,8 +349,10 @@ async function enviarCorreoReserva(reserva) {
     `Fecha: ${fechaTexto}`,
     `Hora: ${reserva.hour}`,
     `Curso / Grado: ${reserva.curso}`,
+    `Seccion: ${reserva.seccion || "N/A"}`,
+    `Asignatura: ${reserva.asignatura || "N/A"}`,
     `Cantidad de iPads: ${reserva.cantidad}`,
-    `Informacion adicional: ${reserva.nota || "N/A"}`,
+    `Objetivo de uso: ${reserva.objetivoUso || reserva.nota || "N/A"}`,
     `Estado: ${estadoTexto}`,
     "",
     "Gracias por usar el calendario de solicitudes del Colegio Americano de Bogotá Bilingüe."
@@ -308,6 +390,14 @@ async function enviarCorreoReserva(reserva) {
                 <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.curso || "N/A")}</td>
               </tr>
               <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Seccion</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.seccion || "N/A")}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Asignatura</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.asignatura || "N/A")}</td>
+              </tr>
+              <tr>
                 <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Cantidad de iPads</td>
                 <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.cantidad)}</td>
               </tr>
@@ -317,8 +407,8 @@ async function enviarCorreoReserva(reserva) {
               </tr>
             </table>
             <div style="margin-top:18px;padding:14px 16px;background:#f8fafc;border-left:4px solid #F08C28;border-radius:8px;">
-              <strong style="display:block;margin-bottom:6px;color:#1C4169;">Informacion adicional</strong>
-              <p style="margin:0;line-height:1.5;">${escaparHTML(reserva.nota || "Sin informacion adicional")}</p>
+              <strong style="display:block;margin-bottom:6px;color:#1C4169;">Objetivo de uso</strong>
+              <p style="margin:0;line-height:1.5;">${escaparHTML(reserva.objetivoUso || reserva.nota || "Sin objetivo de uso")}</p>
             </div>
             <p style="margin:20px 0 0;color:#667085;font-size:12px;line-height:1.5;">
               Este mensaje fue generado automaticamente por el calendario de solicitudes por favor no responder.
@@ -404,9 +494,25 @@ function validarLimiteSolicitudesHorario(fecha, hour) {
   return { limite, usadas, disponibles: limite - usadas };
 }
 
-function validarSolicitudReserva({ fecha, hour, equipo, usuario, cantidad, correo }, rol = "profesor") {
-  if (!fecha || !hour || !equipo || !usuario || !correo) {
+function obtenerAsignaturaSolicitud(solicitud) {
+  return String(solicitud.asignatura || solicitud.materia || solicitud.subject || solicitud.area || "").trim();
+}
+
+function obtenerObjetivoSolicitud(solicitud) {
+  return String(solicitud.objetivoUso || solicitud.nota || "").trim();
+}
+
+function validarSolicitudReserva(solicitud, rol = "profesor") {
+  const { fecha, hour, equipo, usuario, cantidad, correo, seccion } = solicitud;
+  const asignatura = obtenerAsignaturaSolicitud(solicitud);
+  const objetivo = obtenerObjetivoSolicitud(solicitud);
+
+  if (!fecha || !hour || !equipo || !usuario || !correo || !seccion || !asignatura || !objetivo) {
     return { error: "Faltan datos obligatorios" };
+  }
+
+  if (!SECCIONES_PERMITIDAS.has(String(seccion || "").trim())) {
+    return { error: "La sección seleccionada no es válida" };
   }
 
   if (!["admin", "coordinador"].includes(rol) && !estaEnVentanaReservaProfesor(fecha)) {
@@ -447,10 +553,41 @@ function textoNormalizado(valor) {
   return String(valor || "").trim().toLowerCase();
 }
 
-function buscarReservaDuplicadaReciente({ clientRequestId, fecha, hour, usuario, curso, cantidad, correo, nota }) {
+function completarReservaDuplicada(reserva, solicitud) {
+  const asignatura = obtenerAsignaturaSolicitud(solicitud);
+  const objetivo = obtenerObjetivoSolicitud(solicitud);
+  let actualizada = false;
+
+  if (!reserva.seccion && solicitud.seccion) {
+    reserva.seccion = String(solicitud.seccion || "").trim();
+    actualizada = true;
+  }
+
+  if (!obtenerAsignaturaSolicitud(reserva) && asignatura) {
+    reserva.asignatura = asignatura;
+    reserva.materia = asignatura;
+    reserva.subject = asignatura;
+    actualizada = true;
+  }
+
+  if (!obtenerObjetivoSolicitud(reserva) && objetivo) {
+    reserva.objetivoUso = objetivo;
+    reserva.nota = objetivo;
+    actualizada = true;
+  }
+
+  if (actualizada) guardarReservas();
+  return reserva;
+}
+
+function buscarReservaDuplicadaReciente(solicitud) {
+  const { clientRequestId, fecha, hour, usuario, curso, seccion, cantidad, correo } = solicitud;
+  const asignatura = obtenerAsignaturaSolicitud(solicitud);
+  const objetivo = obtenerObjetivoSolicitud(solicitud);
+
   if (clientRequestId) {
     const existentePorRequest = reservas.find(r => r.clientRequestId === clientRequestId);
-    if (existentePorRequest) return existentePorRequest;
+    if (existentePorRequest) return completarReservaDuplicada(existentePorRequest, solicitud);
   }
 
   const ahora = Date.now();
@@ -464,9 +601,11 @@ function buscarReservaDuplicadaReciente({ clientRequestId, fecha, hour, usuario,
       r.hour === hour &&
       textoNormalizado(r.usuario) === textoNormalizado(usuario) &&
       textoNormalizado(r.curso) === textoNormalizado(curso) &&
+      textoNormalizado(r.seccion) === textoNormalizado(seccion) &&
+      textoNormalizado(obtenerAsignaturaSolicitud(r)) === textoNormalizado(asignatura) &&
       parseInt(r.cantidad, 10) === cantidadNormalizada &&
       textoNormalizado(r.correo) === textoNormalizado(correo) &&
-      textoNormalizado(r.nota) === textoNormalizado(nota) &&
+      textoNormalizado(obtenerObjetivoSolicitud(r)) === textoNormalizado(objetivo) &&
       Number.isFinite(creadoEn) &&
       ahora - creadoEn <= ventanaDuplicadoMs;
   });
@@ -519,7 +658,9 @@ app.post("/reservas/validar", (req, res) => {
 
 // POST nueva reserva
 app.post("/reservas", async (req, res) => {
-  const { clientRequestId, fecha, hour, equipo, usuario, curso, cantidad, correo, nota } = req.body;
+  const { clientRequestId, fecha, hour, equipo, usuario, curso, seccion, cantidad, correo } = req.body;
+  const asignatura = obtenerAsignaturaSolicitud(req.body);
+  const objetivo = obtenerObjetivoSolicitud(req.body);
 
   const reservaDuplicada = buscarReservaDuplicadaReciente(req.body);
   if (reservaDuplicada) {
@@ -545,9 +686,14 @@ app.post("/reservas", async (req, res) => {
     equipo,
     usuario,
     curso: curso || "",
+    seccion: String(seccion || "").trim(),
+    asignatura,
+    materia: asignatura,
+    subject: asignatura,
     cantidad: validacion.capacidad.cantidadSolicitada,
     correo: String(correo || "").trim(),
-    nota: nota || "",
+    objetivoUso: objetivo,
+    nota: objetivo,
     estado: "aprobado"
   };
 
@@ -704,19 +850,24 @@ app.get("/feedback", requerirAdmin, (req, res) => {
 
 // POST feedback del servicio
 app.post("/feedback", (req, res) => {
-  const { wifi, colaboradores, dispositivos, comentario } = req.body;
+  const { correo, eficienciaPrestamo, colaboradores, configuracionIpads, comentario } = req.body;
   const valoresPermitidos = ["", "1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5"];
 
-  if (![wifi, colaboradores, dispositivos].every(valor => valoresPermitidos.includes(String(valor || "")))) {
+  if (!correoInstitucionalValido(correo)) {
+    return res.status(400).json({ error: "El correo debe pertenecer al dominio @colamericano.edu.co" });
+  }
+
+  if (![eficienciaPrestamo, colaboradores, configuracionIpads].every(valor => valoresPermitidos.includes(String(valor || "")))) {
     return res.status(400).json({ error: "Calificacion invalida" });
   }
 
   const nuevoFeedback = {
     id: Date.now(),
     creadoEn: new Date().toISOString(),
-    wifi: String(wifi || ""),
+    correo: String(correo || "").trim(),
+    eficienciaPrestamo: String(eficienciaPrestamo || ""),
     colaboradores: String(colaboradores || ""),
-    dispositivos: String(dispositivos || ""),
+    configuracionIpads: String(configuracionIpads || ""),
     comentario: String(comentario || "").trim()
   };
 
@@ -767,19 +918,34 @@ app.delete("/bloqueos/:id", requerirAdmin, (req, res) => {
   res.json({ message: "Bloqueo eliminado ✅" });
 });
 
-// POST login usuarios internos (básico, sin JWT por ahora)
+// POST login usuarios internos
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
   const usuario = String(username || "").trim().toLowerCase();
 
+  if (loginBloqueado(req, username)) {
+    return res.status(429).json({ error: "Demasiados intentos. Intenta de nuevo más tarde." });
+  }
+
   if (validarAdmin(username, password)) {
-    return res.json({ token: "admin-token-seguro", rol: "admin", usuario: adminConfig.username || "admin" });
+    limpiarIntentosLogin(req, username);
+    return res.json({
+      token: crearTokenSesion({ rol: "admin", usuario: adminConfig.username || "admin" }),
+      rol: "admin",
+      usuario: adminConfig.username || "admin"
+    });
   }
 
   if (validarCoordinador(username, password)) {
-    return res.json({ token: COORDINATOR_TOKEN, rol: "coordinador", usuario });
+    limpiarIntentosLogin(req, username);
+    return res.json({
+      token: crearTokenSesion({ rol: "coordinador", usuario }),
+      rol: "coordinador",
+      usuario
+    });
   }
 
+  registrarLoginFallido(req, username);
   res.status(401).json({ error: "Credenciales incorrectas ❌" });
 });
 

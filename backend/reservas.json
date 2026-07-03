@@ -97,7 +97,7 @@
     "cantidad": 32,
     "correo": "desarrolloinformatico@colamericano.edu.co",
     "nota": "PLENO math",
-    "estado": "aprobado"
+    "estado": "rechazado"
   },
   {
     "id": 1781098929822,
@@ -153,6 +153,20 @@
     "cantidad": 21,
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Prueba",
+    "estado": "rechazado"
+  },
+  {
+    "id": 1782233137005,
+    "creadoEn": "2026-06-23T16:45:37.005Z",
+    "clientRequestId": "25581f45-3bc5-41a0-8ea4-613d0b4f88a4",
+    "fecha": "2026-06-24",
+    "hour": "08:00-08:45",
+    "equipo": "20 iPads · 1101",
+    "usuario": "Kevin Torres",
+    "curso": "1101",
+    "cantidad": 20,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "nota": "Evaluación semanal",
     "estado": "rechazado"
   }
 ]

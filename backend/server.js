@@ -44,6 +44,7 @@ const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("he
 const TOKEN_EXPIRES_IN = process.env.TOKEN_EXPIRES_IN || "8h";
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
+const DIAS_ANTELACION_RESERVA = 2;
 const loginAttempts = new Map();
 const FESTIVOS_COLOMBIA = new Set([
   "2026-06-29",
@@ -82,6 +83,30 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "50kb" }));
 app.use(express.static(path.join(__dirname, "../frontend")));
 
+function normalizarReserva(reserva) {
+  if (!reserva || typeof reserva !== "object") return reserva;
+
+  const asignatura = obtenerAsignaturaSolicitud(reserva);
+  const objetivo = obtenerObjetivoSolicitud(reserva);
+
+  if (asignatura) {
+    reserva.asignatura = asignatura;
+    reserva.materia = asignatura;
+    reserva.subject = asignatura;
+  }
+
+  if (objetivo) {
+    reserva.objetivoUso = objetivo;
+    reserva.nota = objetivo;
+  }
+
+  return reserva;
+}
+
+function normalizarReservas(lista) {
+  return Array.isArray(lista) ? lista.map(normalizarReserva) : [];
+}
+
 // =======================
 // CARGAR DATOS
 // =======================
@@ -98,7 +123,7 @@ let adminConfig = {
 
 try {
   const data = fs.readFileSync(RESERVAS_FILE, "utf-8");
-  reservas = JSON.parse(data);
+  reservas = normalizarReservas(JSON.parse(data));
 } catch {
   reservas = [];
 }
@@ -139,6 +164,7 @@ try {
 }
 
 function guardarReservas() {
+  reservas = normalizarReservas(reservas);
   fs.writeFileSync(RESERVAS_FILE, JSON.stringify(reservas, null, 2));
 }
 
@@ -275,7 +301,7 @@ function estaEnVentanaReservaProfesor(fecha) {
   const inicioSemana = obtenerInicioSemana(hoy);
   const inicio = new Date(hoy);
   inicio.setHours(0, 0, 0, 0);
-  inicio.setDate(inicio.getDate() + 1);
+  inicio.setDate(inicio.getDate() + DIAS_ANTELACION_RESERVA);
 
   const fin = new Date(inicioSemana);
   fin.setDate(inicioSemana.getDate() + 13);
@@ -516,7 +542,7 @@ function validarSolicitudReserva(solicitud, rol = "profesor") {
   }
 
   if (!["admin", "coordinador"].includes(rol) && !estaEnVentanaReservaProfesor(fecha)) {
-    return { error: "Solo puedes agendar desde mañana hasta el final de la semana siguiente." };
+    return { error: "Solo puedes agendar con 2 días de antelación hasta el final de la semana siguiente." };
   }
 
   if (esFestivoColombia(fecha)) {
@@ -628,7 +654,7 @@ app.get("/config", (req, res) => {
 
 // GET reservas
 app.get("/reservas", (req, res) => {
-  res.json(reservas);
+  res.json(normalizarReservas(reservas));
 });
 
 // GET solicitudes recientes (solo admin)
@@ -642,7 +668,7 @@ app.get("/reservas/recientes", requerirAdmin, (req, res) => {
     })
     .slice(0, limite);
 
-  res.json(recientes);
+  res.json(normalizarReservas(recientes));
 });
 
 // POST validar reserva sin guardarla

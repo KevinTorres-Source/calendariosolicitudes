@@ -462,7 +462,7 @@ body {
 }
 
 #btnAdmin, #btnPanelAdmin, #btnSolicitudesRecientes, #btnLogout {
-  background: rgba(255,255,255,0.1);
+  background: transparent;
   color: #ffffff;
   border: 1px solid rgba(255,255,255,0.2);
   padding: 10px 12px;
@@ -476,9 +476,18 @@ body {
   text-align: center;
 }
 
-#btnAdmin:hover, #btnPanelAdmin:hover, #btnSolicitudesRecientes:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.28); }
-#btnLogout       { background: transparent; border-color: rgba(255,255,255,0.2); color: #ffffff; }
-#btnLogout:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.3); }
+.admin-menu-toggle {
+  display: none;
+}
+
+#btnAdmin:hover,
+#btnPanelAdmin:hover,
+#btnSolicitudesRecientes:hover,
+#btnLogout:hover,
+.admin-menu-toggle:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.3);
+}
 
 /* ======================
    MAIN
@@ -2199,6 +2208,11 @@ body {
   color: #b42318;
 }
 
+.recent-request-meta .recent-request-subject {
+  background: #eef5fc;
+  color: #1C4169;
+}
+
 .recent-request-note {
   grid-column: 1 / -1;
   margin: 0;
@@ -2401,6 +2415,13 @@ body {
 .login-submit {
   width: 100%;
   flex: none;
+  background: #1C4169;
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(28,65,105,0.24);
+}
+
+.login-submit:hover {
+  background: #163354;
 }
 
 .login-submit:disabled {
@@ -2866,7 +2887,22 @@ body {
     z-index: 920;
     width: calc(50vw - 15px);
     margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
     pointer-events: none;
+  }
+
+  .sidebar-session:not(.admin-menu-open) {
+    width: auto;
+    min-width: 54px;
+  }
+
+  .sidebar-session.admin-menu-open {
+    width: min(220px, calc(100vw - 20px));
   }
 
   .session-user-badge {
@@ -2874,11 +2910,92 @@ body {
   }
 
   .admin-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
     grid-template-columns: 1fr;
-    gap: 5px;
+    gap: 7px;
     padding: 0;
     border-top: 0;
     pointer-events: auto;
+  }
+
+  .admin-menu-toggle:not([hidden]) {
+    display: inline-flex;
+  }
+
+  .admin-menu-toggle {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    z-index: 2;
+    width: 38px;
+    height: 38px;
+    margin-left: 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(28,65,105,0.9);
+    color: #ffffff;
+    cursor: pointer;
+    transition: 0.2s;
+    box-shadow: 0 10px 24px rgba(16,24,40,0.24);
+    backdrop-filter: blur(10px);
+  }
+
+  .admin-panel:not(.menu-open) {
+    min-height: 38px;
+  }
+
+  .admin-panel.menu-open {
+    padding-bottom: 45px;
+  }
+
+  .admin-menu-toggle span {
+    width: 17px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .admin-panel:not(.menu-open) #btnPanelAdmin,
+  .admin-panel:not(.menu-open) #btnSolicitudesRecientes,
+  .admin-panel:not(.menu-open) #btnLogout {
+    display: none !important;
+  }
+
+  .admin-panel.menu-open #btnPanelAdmin,
+  .admin-panel.menu-open #btnSolicitudesRecientes,
+  .admin-panel.menu-open #btnLogout {
+    align-self: stretch;
+    background: rgba(28,65,105,0.9);
+    border-color: rgba(255,255,255,0.22);
+    box-shadow: 0 10px 24px rgba(16,24,40,0.2);
+    backdrop-filter: blur(10px);
+    animation: adminMenuOptionIn 0.18s ease both;
+  }
+
+  .admin-panel.menu-open #btnSolicitudesRecientes {
+    animation-delay: 0.03s;
+  }
+
+  .admin-panel.menu-open #btnLogout {
+    animation-delay: 0.06s;
+  }
+
+  @keyframes adminMenuOptionIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .admin-summary-grid {
@@ -2893,7 +3010,7 @@ body {
     padding: 8px 9px;
     border-radius: 10px;
     font-size: 11px;
-    box-shadow: 0 8px 22px rgba(0,0,0,0.16);
+    box-shadow: none;
   }
 
   .main {

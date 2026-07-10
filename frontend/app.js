@@ -10,6 +10,7 @@ function obtenerAPIBase() {
 
 const API = obtenerAPIBase();
 const permiteFallbackLocal = ["localhost", "127.0.0.1", ""].includes(window.location.hostname);
+const DIAS_ANTELACION_RESERVA = 2;
 
 const hoy = new Date();
 let fechaActual = new Date();
@@ -109,7 +110,7 @@ function estaEnVentanaReservaProfesor(fecha) {
   const inicioSemana = obtenerInicioSemana(hoy);
   const inicio = new Date(hoy);
   inicio.setHours(0, 0, 0, 0);
-  inicio.setDate(inicio.getDate() + 1);
+  inicio.setDate(inicio.getDate() + DIAS_ANTELACION_RESERVA);
 
   const fin = new Date(inicioSemana);
   fin.setDate(inicioSemana.getDate() + 13);
@@ -129,13 +130,37 @@ function correoInstitucionalValido(correo) {
   return /^[^\s@]+@colamericano\.edu\.co$/i.test(String(correo || "").trim());
 }
 
+function normalizarReserva(reserva) {
+  if (!reserva || typeof reserva !== "object") return reserva;
+
+  const asignatura = String(reserva.asignatura || reserva.materia || reserva.subject || reserva.area || "").trim();
+  const objetivoUso = String(reserva.objetivoUso || reserva.nota || "").trim();
+
+  if (asignatura) {
+    reserva.asignatura = asignatura;
+    reserva.materia = asignatura;
+    reserva.subject = asignatura;
+  }
+
+  if (objetivoUso) {
+    reserva.objetivoUso = objetivoUso;
+    reserva.nota = objetivoUso;
+  }
+
+  return reserva;
+}
+
+function normalizarReservas(reservas) {
+  return Array.isArray(reservas) ? reservas.map(normalizarReserva) : [];
+}
+
 // =======================
 // STORAGE LOCAL
 // =======================
 function leerReservasLocal() {
-  try { return JSON.parse(localStorage.getItem("reservas") || "[]"); } catch { return []; }
+  try { return normalizarReservas(JSON.parse(localStorage.getItem("reservas") || "[]")); } catch { return []; }
 }
-function guardarReservasLocal(r) { localStorage.setItem("reservas", JSON.stringify(r)); }
+function guardarReservasLocal(r) { localStorage.setItem("reservas", JSON.stringify(normalizarReservas(r))); }
 function leerBloqueosLocal() {
   try { return JSON.parse(localStorage.getItem("bloqueos") || "[]"); } catch { return []; }
 }
@@ -238,8 +263,9 @@ async function obtenerReservas() {
       const res = await fetch(`${API}/reservas`);
       const data = await res.json();
       if (Array.isArray(data)) {
-        guardarReservasLocal(data);
-        return data;
+        const reservasNormalizadas = normalizarReservas(data);
+        guardarReservasLocal(reservasNormalizadas);
+        return reservasNormalizadas;
       }
     } catch {}
   }
@@ -298,13 +324,13 @@ async function crearReservaAPI(payload) {
   const capacidad = validarCapacidadHorario(reservas, payload.fecha, payload.hour, payload.cantidad);
   if (capacidad.error) return { error: capacidad.error };
 
-  let nueva = {
+  let nueva = normalizarReserva({
     id: Date.now(),
     creadoEn: new Date().toISOString(),
     ...payload,
     cantidad: capacidad.cantidadSolicitada,
     estado: "aprobado"
-  };
+  });
 
   if (backendDisponible) {
     try {
@@ -315,7 +341,7 @@ async function crearReservaAPI(payload) {
       });
       const data = await res.json();
       if (data.error) return data;
-      nueva = data.reserva || nueva;
+      nueva = normalizarReserva(data.reserva || nueva);
     } catch {
       if (!permiteFallbackLocal) {
         return { error: "No se pudo guardar la solicitud porque el servidor no respondió." };
@@ -571,6 +597,28 @@ async function loginAdmin() {
   window.location.href = "login.html";
 }
 
+function cerrarMenuAdminMovil() {
+  const panel = document.querySelector(".admin-panel");
+  const session = document.querySelector(".sidebar-session");
+  const toggle = document.getElementById("btnAdminMenu");
+  if (!panel || !toggle) return;
+
+  panel.classList.remove("menu-open");
+  session?.classList.remove("admin-menu-open");
+  toggle.setAttribute("aria-expanded", "false");
+}
+
+function alternarMenuAdminMovil() {
+  const panel = document.querySelector(".admin-panel");
+  const session = document.querySelector(".sidebar-session");
+  const toggle = document.getElementById("btnAdminMenu");
+  if (!panel || !toggle) return;
+
+  const abierto = panel.classList.toggle("menu-open");
+  session?.classList.toggle("admin-menu-open", abierto);
+  toggle.setAttribute("aria-expanded", String(abierto));
+}
+
 function logout() {
   token = null; rol = "profesor"; usuarioSesion = ""; modoAdmin = false;
   localStorage.removeItem("token");
@@ -578,6 +626,7 @@ function logout() {
   localStorage.removeItem("usuarioSesion");
   localStorage.removeItem("modoAdmin");
   actualizarBotonesAdmin();
+  cerrarMenuAdminMovil();
   cerrarPanelAdmin();
   cerrarSolicitudesRecientes();
   renderSemana();
@@ -590,6 +639,8 @@ function actualizarBotonesAdmin() {
   document.getElementById("btnPanelAdmin").style.display = modoAdmin ? "block" : "none";
   document.getElementById("btnSolicitudesRecientes").style.display = modoAdmin ? "block" : "none";
   document.getElementById("btnLogout").style.display = sesionActiva ? "block" : "none";
+  document.getElementById("btnAdminMenu").hidden = !sesionActiva;
+  if (!sesionActiva) cerrarMenuAdminMovil();
   sessionUserBadge.style.display = sesionActiva ? "block" : "none";
   sessionUserBadge.textContent = (usuarioSesion || rol).toUpperCase();
 }
@@ -871,11 +922,11 @@ function obtenerSeccionReserva(reserva) {
 }
 
 function obtenerAsignaturaReserva(reserva) {
-  return String(reserva.asignatura || reserva.materia || reserva.subject || reserva.area || "").trim();
+  return String(normalizarReserva(reserva)?.asignatura || "").trim();
 }
 
 function obtenerObjetivoUsoReserva(reserva) {
-  return String(reserva.objetivoUso || reserva.nota || "").trim();
+  return String(normalizarReserva(reserva)?.objetivoUso || "").trim();
 }
 
 function renderReservasHorario(reservasHorario) {
@@ -1571,7 +1622,7 @@ function renderSolicitudReciente(reserva) {
         <span>${escaparHTML(reserva.cantidad || "0")} iPads</span>
         <span>Course ${escaparHTML(reserva.curso || "N/A")}</span>
         ${seccion ? `<span>${escaparHTML(seccion)}</span>` : ""}
-        ${asignatura ? `<span>${escaparHTML(asignatura)}</span>` : ""}
+        <span class="recent-request-subject">Asignatura: ${escaparHTML(asignatura || "No registrada")}</span>
       </div>
       ${objetivoUso ? `<p class="recent-request-note">${escaparHTML(objetivoUso)}</p>` : ""}
     </article>`;
@@ -2358,14 +2409,28 @@ document.getElementById("seccionSelectOptions").addEventListener("click", e => {
 document.addEventListener("click", e => {
   const select = document.getElementById("seccionSelect");
   if (select && !select.contains(e.target)) cerrarSeccionSelect();
+
+  const session = document.querySelector(".sidebar-session");
+  if (session && !session.contains(e.target)) cerrarMenuAdminMovil();
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") cerrarSeccionSelect();
+  if (e.key === "Escape") cerrarMenuAdminMovil();
 });
 window.addEventListener("resize", actualizarIndicadorScrollSolicitud);
 document.getElementById("btnAdmin").addEventListener("click", loginAdmin);
-document.getElementById("btnPanelAdmin").addEventListener("click", abrirPanelAdmin);
-document.getElementById("btnSolicitudesRecientes").addEventListener("click", abrirSolicitudesRecientes);
+document.getElementById("btnAdminMenu").addEventListener("click", event => {
+  event.stopPropagation();
+  alternarMenuAdminMovil();
+});
+document.getElementById("btnPanelAdmin").addEventListener("click", () => {
+  cerrarMenuAdminMovil();
+  abrirPanelAdmin();
+});
+document.getElementById("btnSolicitudesRecientes").addEventListener("click", () => {
+  cerrarMenuAdminMovil();
+  abrirSolicitudesRecientes();
+});
 document.getElementById("btnLogout").addEventListener("click", logout);
 document.getElementById("btnCerrarConfirmacionAdmin").addEventListener("click", cerrarConfirmacionAdmin);
 document.getElementById("btnCancelarConfirmacionAdmin").addEventListener("click", cerrarConfirmacionAdmin);

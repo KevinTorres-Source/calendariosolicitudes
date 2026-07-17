@@ -702,7 +702,7 @@ function abrirModal(fecha, hour) {
   const ft = fo.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
   document.getElementById("modalFechaHora").textContent =
     `📅 ${ft.charAt(0).toUpperCase() + ft.slice(1)}  ·  🕐 ${hour}`;
-  ["inputNombre", "inputCantidad", "inputCurso", "inputSeccion", "inputAsignatura", "inputCorreo", "inputObjetivoUso"].forEach(id => {
+  ["inputNombre", "inputCantidad", "inputCurso", "inputAplicacion", "inputSeccion", "inputAsignatura", "inputCorreo", "inputObjetivoUso"].forEach(id => {
     document.getElementById(id).value = "";
   });
   setSeccionSeleccionada("");
@@ -737,6 +737,7 @@ async function confirmarReserva() {
   const nombre   = document.getElementById("inputNombre").value.trim();
   const cantidad = document.getElementById("inputCantidad").value.trim();
   const curso    = document.getElementById("inputCurso").value.trim();
+  const aplicacion = document.getElementById("inputAplicacion").value.trim();
   const seccion  = document.getElementById("inputSeccion").value.trim();
   const asignatura = document.getElementById("inputAsignatura").value.trim();
   const correo   = document.getElementById("inputCorreo").value.trim();
@@ -749,7 +750,7 @@ async function confirmarReserva() {
     mostrarErrorSolicitud("Ingresa una cantidad valida.", "inputCantidad");
     return;
   }
-  if (!curso) { mostrarErrorSolicitud("El curso es obligatorio.", "inputCurso"); return; }
+  if (!curso) { mostrarErrorSolicitud("El curso o lugar es obligatorio.", "inputCurso"); return; }
   if (!seccion) { mostrarErrorSolicitud("La sección es obligatoria.", "inputSeccion"); return; }
   if (!asignatura) { mostrarErrorSolicitud("La asignatura es obligatoria.", "inputAsignatura"); return; }
   if (!correoInstitucionalValido(correo)) {
@@ -766,6 +767,7 @@ async function confirmarReserva() {
     usuario: nombre,
     equipo: `${cantidad} iPads · ${curso}`,
     curso,
+    aplicacion,
     seccion,
     asignatura,
     materia: asignatura,
@@ -1209,8 +1211,12 @@ function renderModalReservaAdmin() {
       </div>
       <div class="reserva-admin-details">
         <div>
-          <span class="reserva-admin-label">Curso</span>
-          <p>${escaparHTML(reserva.curso || "Sin curso")}</p>
+          <span class="reserva-admin-label">Curso/Lugar</span>
+          <p>${escaparHTML(reserva.curso || "Sin curso o lugar")}</p>
+        </div>
+        <div>
+          <span class="reserva-admin-label">Aplicación que requiere</span>
+          <p>${escaparHTML(reserva.aplicacion || "No registrada")}</p>
         </div>
         <div>
           <span class="reserva-admin-label">Sección</span>
@@ -1223,6 +1229,10 @@ function renderModalReservaAdmin() {
         <div>
           <span class="reserva-admin-label">Cantidad de iPads</span>
           <p>${escaparHTML(reserva.cantidad || "Sin cantidad")}</p>
+        </div>
+        <div>
+          <span class="reserva-admin-label">Correo electrónico</span>
+          <p>${escaparHTML(reserva.correo || "No registrado")}</p>
         </div>
         <div class="reserva-admin-note">
           <span class="reserva-admin-label">Objetivo de uso</span>

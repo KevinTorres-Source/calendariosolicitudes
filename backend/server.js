@@ -374,10 +374,12 @@ async function enviarCorreoReserva(reserva) {
     `Nombre: ${reserva.usuario}`,
     `Fecha: ${fechaTexto}`,
     `Hora: ${reserva.hour}`,
-    `Curso / Grado: ${reserva.curso}`,
+    `Curso/Lugar: ${reserva.curso}`,
+    `Aplicacion que requiere: ${reserva.aplicacion || "No registrada"}`,
     `Seccion: ${reserva.seccion || "N/A"}`,
     `Asignatura: ${reserva.asignatura || "N/A"}`,
     `Cantidad de iPads: ${reserva.cantidad}`,
+    `Correo electronico: ${reserva.correo}`,
     `Objetivo de uso: ${reserva.objetivoUso || reserva.nota || "N/A"}`,
     `Estado: ${estadoTexto}`,
     "",
@@ -412,8 +414,12 @@ async function enviarCorreoReserva(reserva) {
                 <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.hour)}</td>
               </tr>
               <tr>
-                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Curso / Grado</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Curso/Lugar</td>
                 <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.curso || "N/A")}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Aplicación que requiere</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.aplicacion || "No registrada")}</td>
               </tr>
               <tr>
                 <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Seccion</td>
@@ -426,6 +432,10 @@ async function enviarCorreoReserva(reserva) {
               <tr>
                 <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Cantidad de iPads</td>
                 <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.cantidad)}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Correo electrónico</td>
+                <td style="padding:10px 0;border-bottom:1px solid #eef2f7;text-align:right;font-weight:700;">${escaparHTML(reserva.correo || "N/A")}</td>
               </tr>
               <tr>
                 <td style="padding:10px 0;border-bottom:1px solid #eef2f7;color:#667085;font-weight:700;">Estado</td>
@@ -584,6 +594,11 @@ function completarReservaDuplicada(reserva, solicitud) {
   const objetivo = obtenerObjetivoSolicitud(solicitud);
   let actualizada = false;
 
+  if (!reserva.aplicacion && solicitud.aplicacion) {
+    reserva.aplicacion = String(solicitud.aplicacion || "").trim();
+    actualizada = true;
+  }
+
   if (!reserva.seccion && solicitud.seccion) {
     reserva.seccion = String(solicitud.seccion || "").trim();
     actualizada = true;
@@ -607,7 +622,7 @@ function completarReservaDuplicada(reserva, solicitud) {
 }
 
 function buscarReservaDuplicadaReciente(solicitud) {
-  const { clientRequestId, fecha, hour, usuario, curso, seccion, cantidad, correo } = solicitud;
+  const { clientRequestId, fecha, hour, usuario, curso, aplicacion, seccion, cantidad, correo } = solicitud;
   const asignatura = obtenerAsignaturaSolicitud(solicitud);
   const objetivo = obtenerObjetivoSolicitud(solicitud);
 
@@ -627,6 +642,7 @@ function buscarReservaDuplicadaReciente(solicitud) {
       r.hour === hour &&
       textoNormalizado(r.usuario) === textoNormalizado(usuario) &&
       textoNormalizado(r.curso) === textoNormalizado(curso) &&
+      textoNormalizado(r.aplicacion) === textoNormalizado(aplicacion) &&
       textoNormalizado(r.seccion) === textoNormalizado(seccion) &&
       textoNormalizado(obtenerAsignaturaSolicitud(r)) === textoNormalizado(asignatura) &&
       parseInt(r.cantidad, 10) === cantidadNormalizada &&
@@ -684,7 +700,7 @@ app.post("/reservas/validar", (req, res) => {
 
 // POST nueva reserva
 app.post("/reservas", async (req, res) => {
-  const { clientRequestId, fecha, hour, equipo, usuario, curso, seccion, cantidad, correo } = req.body;
+  const { clientRequestId, fecha, hour, equipo, usuario, curso, aplicacion, seccion, cantidad, correo } = req.body;
   const asignatura = obtenerAsignaturaSolicitud(req.body);
   const objetivo = obtenerObjetivoSolicitud(req.body);
 
@@ -712,6 +728,7 @@ app.post("/reservas", async (req, res) => {
     equipo,
     usuario,
     curso: curso || "",
+    aplicacion: String(aplicacion || "").trim(),
     seccion: String(seccion || "").trim(),
     asignatura,
     materia: asignatura,

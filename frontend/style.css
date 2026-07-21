@@ -1933,7 +1933,43 @@ body {
 }
 
 .requests-summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 12px;
+}
+
+.requests-filter-bar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e2ddf3;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.requests-filter-label {
+  display: block;
+  margin-top: 3px;
+  color: #171728;
+  font-weight: 800;
+}
+
+.requests-month-select {
+  width: min(240px, 100%);
+}
+
+.requests-month-select .custom-select-button {
+  min-height: 42px;
+  border-color: #d8d2e9;
+  border-radius: 10px;
+  color: #1C4169;
+}
+
+.requests-month-select .custom-select-options {
+  max-height: 250px;
+  overflow-y: auto;
 }
 
 .requests-summary-grid .admin-stat strong {
@@ -2012,6 +2048,52 @@ body {
   padding-right: 4px;
 }
 
+.requests-ranking-chart {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  max-height: 330px;
+  margin-top: 18px;
+  padding-right: 5px;
+  overflow-y: auto;
+}
+
+.requests-ranking-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(130px, 1.4fr) 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.requests-ranking-row span {
+  overflow: hidden;
+  color: #3f3b55;
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.requests-ranking-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eeeaf7;
+}
+
+.requests-ranking-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #38bdf8);
+}
+
+.requests-ranking-row strong {
+  color: #1C4169;
+  font-size: 13px;
+  text-align: right;
+}
+
 .requests-monthly-chart {
   min-height: 230px;
   display: flex;
@@ -2061,6 +2143,15 @@ body {
 @media (max-width: 900px) {
   .requests-analytics-grid {
     grid-template-columns: 1fr;
+  }
+
+  .requests-filter-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .requests-month-select {
+    width: 100%;
   }
 
   .requests-pie-chart {

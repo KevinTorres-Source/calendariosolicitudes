@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
   <link rel="shortcut icon" href="Images/Mini_logo.png" shortcut icon>
-  <link rel="stylesheet" href="style.css?v=91">
+  <link rel="stylesheet" href="style.css?v=93">
 </head>
 <body>
 
@@ -96,11 +96,11 @@
       </header>
 
       <div class="admin-tabs" role="tablist" aria-label="Analytics sections">
-        <button class="admin-tab active" id="adminTabFeedback" type="button" role="tab" aria-selected="true" aria-controls="adminFeedbackView">Feedback</button>
-        <button class="admin-tab" id="adminTabRequests" type="button" role="tab" aria-selected="false" aria-controls="adminRequestsView">Requests</button>
+        <button class="admin-tab active" id="adminTabRequests" type="button" role="tab" aria-selected="true" aria-controls="adminRequestsView">Requests</button>
+        <button class="admin-tab" id="adminTabFeedback" type="button" role="tab" aria-selected="false" aria-controls="adminFeedbackView">Feedback</button>
       </div>
 
-      <div class="admin-view active" id="adminFeedbackView">
+      <div class="admin-view" id="adminFeedbackView">
         <div class="admin-summary-grid">
           <article class="admin-stat">
             <span>Total responses</span>
@@ -158,23 +158,28 @@
         </div>
       </div>
 
-      <div class="admin-view" id="adminRequestsView">
+      <div class="admin-view active" id="adminRequestsView">
+        <div class="requests-filter-bar">
+          <div>
+            <span class="admin-panel-label">Periodo del informe</span>
+            <span class="requests-filter-label">Mes</span>
+          </div>
+          <div class="custom-select requests-month-select" id="requestsMonthSelect">
+            <button class="custom-select-button" id="requestsMonthSelectButton" type="button" aria-haspopup="listbox" aria-expanded="false">
+              <span id="requestsMonthSelectLabel">Seleccionar mes</span>
+              <span class="custom-select-arrow" aria-hidden="true"></span>
+            </button>
+            <div class="custom-select-options" id="requestsMonthSelectOptions" role="listbox" aria-label="Mes de las métricas de solicitudes"></div>
+          </div>
+        </div>
         <div class="admin-summary-grid requests-summary-grid">
           <article class="admin-stat">
-            <span>Total requests</span>
+            <span>Solicitudes del mes</span>
             <strong id="requestsTotalSolicitudes">0</strong>
           </article>
           <article class="admin-stat">
-            <span>Total iPads</span>
-            <strong id="requestsTotalIpads">0</strong>
-          </article>
-          <article class="admin-stat strength">
-            <span>Top section</span>
-            <strong id="requestsTopSeccion">-</strong>
-          </article>
-          <article class="admin-stat weakness">
-            <span>Top subject</span>
-            <strong id="requestsTopAsignatura">-</strong>
+            <span>Profesores del mes</span>
+            <strong id="requestsTotalProfesores">0</strong>
           </article>
         </div>
 
@@ -182,8 +187,8 @@
           <section class="admin-visual-panel requests-chart-panel">
             <div class="admin-section-title">
               <div>
-                <span class="admin-panel-label">Requests</span>
-                <h4>iPads by section</h4>
+                <span class="admin-panel-label">Solicitudes mensuales</span>
+                <h4>Número de solicitudes por sección</h4>
               </div>
             </div>
             <div id="requestsSeccionChart" class="requests-pie-chart"></div>
@@ -192,21 +197,41 @@
           <section class="admin-visual-panel requests-chart-panel">
             <div class="admin-section-title">
               <div>
-                <span class="admin-panel-label">Requests</span>
-                <h4>iPads by subject</h4>
+                <span class="admin-panel-label">Solicitudes mensuales</span>
+                <h4>Número de solicitudes por asignatura</h4>
               </div>
             </div>
-            <div id="requestsAsignaturaChart" class="requests-pie-chart"></div>
+            <div id="requestsAsignaturaChart" class="requests-ranking-chart"></div>
           </section>
 
           <section class="admin-visual-panel requests-monthly-panel">
             <div class="admin-section-title">
               <div>
-                <span class="admin-panel-label">Requests</span>
-                <h4>Requests created by month</h4>
+                <span class="admin-panel-label">Histórico</span>
+                <h4>Cantidad de solicitudes registradas por mes</h4>
               </div>
             </div>
             <div id="requestsMensualesChart" class="requests-monthly-chart"></div>
+          </section>
+
+          <section class="admin-visual-panel requests-chart-panel">
+            <div class="admin-section-title">
+              <div>
+                <span class="admin-panel-label">Solicitudes mensuales</span>
+                <h4>Cursos/Lugares con más solicitudes</h4>
+              </div>
+            </div>
+            <div id="requestsCursoChart" class="requests-ranking-chart"></div>
+          </section>
+
+          <section class="admin-visual-panel requests-chart-panel">
+            <div class="admin-section-title">
+              <div>
+                <span class="admin-panel-label">Solicitudes mensuales</span>
+                <h4>Profesores/usuarios con más solicitudes</h4>
+              </div>
+            </div>
+            <div id="requestsProfesorChart" class="requests-ranking-chart"></div>
           </section>
         </div>
       </div>
@@ -431,6 +456,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=74"></script>
+  <script src="app.js?v=77"></script>
 </body>
 </html>

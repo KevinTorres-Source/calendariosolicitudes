@@ -32,7 +32,8 @@ let pendingAdminHour = null;
 let backendDisponible = false;
 let maxDispositivosPorDia = 70;
 let solicitudesPorHoraDefault = 2;
-let adminAnalyticsTab = "feedback";
+let adminAnalyticsTab = "requests";
+let requestsAnalyticsMonth = "";
 
 const hours = [
   "07:15-08:00",
@@ -1558,6 +1559,7 @@ function escaparHTML(texto) {
 
 function cerrarPanelAdmin() {
   document.getElementById("adminOverlay").style.display = "none";
+  cerrarRequestsMonthSelect();
 }
 
 async function abrirPanelAdmin() {
@@ -1567,6 +1569,7 @@ async function abrirPanelAdmin() {
 }
 
 async function cambiarAdminAnalyticsTab(tab) {
+  cerrarRequestsMonthSelect();
   adminAnalyticsTab = tab === "requests" ? "requests" : "feedback";
   const esFeedback = adminAnalyticsTab === "feedback";
 
@@ -1618,6 +1621,7 @@ function renderSolicitudReciente(reserva) {
   const nombre = escaparHTML(reserva.usuario || "Unknown user");
   const seccion = obtenerSeccionReserva(reserva);
   const asignatura = obtenerAsignaturaReserva(reserva);
+  const aplicacion = String(reserva.aplicacion || "").trim();
   const objetivoUso = obtenerObjetivoUsoReserva(reserva);
   const mensaje = `${nombre} has made a request for ${fecha} - ${hora}.`;
 
@@ -1633,6 +1637,7 @@ function renderSolicitudReciente(reserva) {
         <span>Course ${escaparHTML(reserva.curso || "N/A")}</span>
         ${seccion ? `<span>${escaparHTML(seccion)}</span>` : ""}
         <span class="recent-request-subject">Asignatura: ${escaparHTML(asignatura || "No registrada")}</span>
+        <span class="recent-request-subject">Aplicación que requiere: ${escaparHTML(aplicacion || "No registrada")}</span>
       </div>
       ${objetivoUso ? `<p class="recent-request-note">${escaparHTML(objetivoUso)}</p>` : ""}
     </article>`;
@@ -1898,7 +1903,7 @@ function renderFeedbackHistorial(feedback) {
 }
 
 function agregarTotalPorClave(mapa, clave, cantidad) {
-  const nombre = String(clave || "Not registered").trim() || "Not registered";
+  const nombre = String(clave || "No registrado").trim() || "No registrado";
   mapa.set(nombre, (mapa.get(nombre) || 0) + cantidad);
 }
 
@@ -1957,7 +1962,7 @@ function obtenerMesCreacionSolicitud(reserva) {
 
   return {
     key: `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`,
-    label: fecha.toLocaleDateString("en-US", { month: "short", year: "numeric" })
+    label: fecha.toLocaleDateString("es-CO", { month: "short", year: "numeric" })
   };
 }
 
@@ -1973,6 +1978,91 @@ function crearDatosSolicitudesMensuales(solicitudes) {
   });
 
   return [...meses.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function crearInformeMensualSolicitudes(solicitudes) {
+  const meses = new Map();
+
+  solicitudes.forEach(reserva => {
+    const mes = obtenerMesCreacionSolicitud(reserva);
+    if (!mes) return;
+
+    if (!meses.has(mes.key)) {
+      meses.set(mes.key, {
+        ...mes,
+        total: 0,
+        secciones: new Map(),
+        asignaturas: new Map(),
+        cursos: new Map(),
+        profesores: new Map()
+      });
+    }
+
+    const informe = meses.get(mes.key);
+    informe.total += 1;
+    agregarTotalPorClave(informe.secciones, obtenerSeccionReserva(reserva), 1);
+    agregarTotalPorClave(informe.asignaturas, obtenerAsignaturaReserva(reserva), 1);
+    agregarTotalPorClave(informe.cursos, reserva.curso, 1);
+    agregarTotalPorClave(informe.profesores, String(reserva.correo || "").trim().toLowerCase(), 1);
+  });
+
+  return [...meses.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function renderRequestsRankingChart(contenedorId, datos) {
+  const contenedor = document.getElementById(contenedorId);
+  if (!datos.length) {
+    contenedor.innerHTML = '<p class="admin-empty">No hay datos registrados para este mes.</p>';
+    return;
+  }
+
+  const max = Math.max(...datos.map(item => item.value), 1);
+  contenedor.innerHTML = datos.map(item => `
+    <div class="requests-ranking-row" title="${escaparHTML(item.label)}: ${item.value}">
+      <span>${escaparHTML(item.label)}</span>
+      <div class="requests-ranking-track" aria-hidden="true">
+        <i class="requests-ranking-fill" style="width:${Math.max(4, (item.value / max) * 100).toFixed(1)}%"></i>
+      </div>
+      <strong>${item.value}</strong>
+    </div>`).join("");
+}
+
+function configurarSelectorMesSolicitudes(informes) {
+  const label = document.getElementById("requestsMonthSelectLabel");
+  const opciones = document.getElementById("requestsMonthSelectOptions");
+  const boton = document.getElementById("requestsMonthSelectButton");
+  const claves = informes.map(informe => informe.key);
+  if (!claves.includes(requestsAnalyticsMonth)) {
+    requestsAnalyticsMonth = claves.at(-1) || "";
+  }
+
+  const seleccionado = informes.find(informe => informe.key === requestsAnalyticsMonth);
+  label.textContent = seleccionado?.label || "Sin meses disponibles";
+  opciones.innerHTML = informes.slice().reverse().map(informe =>
+    `<button class="custom-select-option${informe.key === requestsAnalyticsMonth ? " selected" : ""}" type="button" role="option" data-value="${informe.key}" aria-selected="${informe.key === requestsAnalyticsMonth}">${escaparHTML(informe.label)}</button>`
+  ).join("");
+  boton.disabled = !informes.length;
+}
+
+function cerrarRequestsMonthSelect() {
+  const select = document.getElementById("requestsMonthSelect");
+  const boton = document.getElementById("requestsMonthSelectButton");
+  select.classList.remove("open");
+  boton.setAttribute("aria-expanded", "false");
+}
+
+function alternarRequestsMonthSelect(event) {
+  event.stopPropagation();
+  const select = document.getElementById("requestsMonthSelect");
+  const boton = document.getElementById("requestsMonthSelectButton");
+  const abierto = select.classList.toggle("open");
+  boton.setAttribute("aria-expanded", String(abierto));
+}
+
+function seleccionarMesAnalytics(opcion) {
+  requestsAnalyticsMonth = opcion.dataset.value || "";
+  cerrarRequestsMonthSelect();
+  renderRequestsAnalytics();
 }
 
 function renderRequestsMonthlyChart(datos) {
@@ -1996,37 +2086,27 @@ function renderRequestsMonthlyChart(datos) {
 
 async function renderRequestsAnalytics() {
   const status = document.getElementById("adminStatus");
-  status.textContent = "Loading request analytics...";
+  status.textContent = "Cargando métricas de solicitudes...";
 
   const data = await obtenerReservas();
-  const solicitudes = Array.isArray(data)
-    ? data.filter(reserva => String(reserva.estado || "aprobado").toLowerCase() !== "rechazado")
-    : [];
-
-  const porSeccion = new Map();
-  const porAsignatura = new Map();
-  let totalIpads = 0;
-
-  solicitudes.forEach(reserva => {
-    const cantidad = parseInt(reserva.cantidad, 10) || 0;
-    totalIpads += cantidad;
-    agregarTotalPorClave(porSeccion, obtenerSeccionReserva(reserva), cantidad);
-    agregarTotalPorClave(porAsignatura, obtenerAsignaturaReserva(reserva), cantidad);
-  });
-
-  const datosSeccion = crearDatosPieDesdeMapa(porSeccion);
-  const datosAsignatura = crearDatosPieDesdeMapa(porAsignatura);
+  const solicitudes = Array.isArray(data) ? data : [];
+  const informes = crearInformeMensualSolicitudes(solicitudes);
+  configurarSelectorMesSolicitudes(informes);
+  const informe = informes.find(item => item.key === requestsAnalyticsMonth);
+  const datosSeccion = crearDatosPieDesdeMapa(informe?.secciones || new Map());
+  const datosAsignatura = crearDatosPieDesdeMapa(informe?.asignaturas || new Map());
+  const datosCurso = crearDatosPieDesdeMapa(informe?.cursos || new Map());
+  const datosProfesor = crearDatosPieDesdeMapa(informe?.profesores || new Map());
   const datosMensuales = crearDatosSolicitudesMensuales(solicitudes);
 
-  document.getElementById("requestsTotalSolicitudes").textContent = solicitudes.length;
-  document.getElementById("requestsTotalIpads").textContent = totalIpads;
-  document.getElementById("requestsTopSeccion").textContent = obtenerTopCategoria(datosSeccion);
-  document.getElementById("requestsTopAsignatura").textContent = obtenerTopCategoria(datosAsignatura);
-
-  renderRequestsPieChart("requestsSeccionChart", datosSeccion, totalIpads, "iPads");
-  renderRequestsPieChart("requestsAsignaturaChart", datosAsignatura, totalIpads, "iPads");
+  document.getElementById("requestsTotalSolicitudes").textContent = informe?.total || 0;
+  document.getElementById("requestsTotalProfesores").textContent = informe?.profesores.size || 0;
+  renderRequestsPieChart("requestsSeccionChart", datosSeccion, informe?.total || 0, "Solicitudes");
+  renderRequestsRankingChart("requestsAsignaturaChart", datosAsignatura);
+  renderRequestsRankingChart("requestsCursoChart", datosCurso);
+  renderRequestsRankingChart("requestsProfesorChart", datosProfesor);
   renderRequestsMonthlyChart(datosMensuales);
-  status.textContent = solicitudes.length ? "Request analytics updated." : "No request data yet.";
+  status.textContent = solicitudes.length ? "Métricas mensuales actualizadas." : "Todavía no hay solicitudes registradas.";
 }
 
 function excelValor(valor) {
@@ -2118,6 +2198,37 @@ function graficaBarrasExcel(titulo, datos, color = "#1C4169") {
     </svg>`;
 }
 
+function graficaBarrasHorizontalesExcel(titulo, datos, color = "#7c3aed") {
+  if (!datos.length) return `<h2>${excelValor(titulo)}</h2><p>No data</p>`;
+
+  const visibles = datos.slice(0, 15);
+  const width = 720;
+  const rowHeight = 30;
+  const height = 32 + visibles.length * rowHeight;
+  const labelWidth = 250;
+  const max = Math.max(...visibles.map(item => item.value), 1);
+  const filas = visibles.map((item, index) => {
+    const y = 18 + index * rowHeight;
+    const ancho = Math.max(4, (item.value / max) * 360);
+    return `
+      <text x="${labelWidth - 10}" y="${y + 13}" text-anchor="end" font-family="Arial" font-size="11" fill="#3f3b55">${excelValor(item.label)}</text>
+      <rect x="${labelWidth}" y="${y}" width="${ancho.toFixed(2)}" height="16" fill="${color}" rx="4"></rect>
+      <text x="${labelWidth + ancho + 8}" y="${y + 13}" font-family="Arial" font-size="11" font-weight="700" fill="#1C4169">${item.value}</text>`;
+  }).join("");
+
+  return `
+    <h2>${excelValor(titulo)}</h2>
+    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+      ${filas}
+    </svg>`;
+}
+
+function crearFilasMetricaMensual(informes, propiedad) {
+  return informes.flatMap(informe =>
+    crearDatosPieDesdeMapa(informe[propiedad]).map(item => [informe.key, informe.label, item.label, item.value])
+  );
+}
+
 function graficaLineaFeedbackExcel(tendencia) {
   if (!tendencia.length) return "<h2>Feedback trend</h2><p>No data</p>";
 
@@ -2154,21 +2265,20 @@ async function exportarAnalyticsExcel() {
 
   const feedback = Array.isArray(feedbackData) ? feedbackData : [];
   const reservas = Array.isArray(reservasData) ? reservasData : [];
-  const solicitudes = reservas.filter(reserva => String(reserva.estado || "aprobado").toLowerCase() !== "rechazado");
+  const solicitudes = reservas;
   const metricasFeedback = calcularMetricasFeedback(feedback);
-
-  const porSeccion = new Map();
-  const porAsignatura = new Map();
-  let totalIpads = 0;
-  solicitudes.forEach(reserva => {
-    const cantidad = parseInt(reserva.cantidad, 10) || 0;
-    totalIpads += cantidad;
-    agregarTotalPorClave(porSeccion, obtenerSeccionReserva(reserva), cantidad);
-    agregarTotalPorClave(porAsignatura, obtenerAsignaturaReserva(reserva), cantidad);
-  });
-  const datosSeccion = crearDatosPieDesdeMapa(porSeccion);
-  const datosAsignatura = crearDatosPieDesdeMapa(porAsignatura);
+  const informesMensuales = crearInformeMensualSolicitudes(solicitudes);
+  const informeSeleccionado = informesMensuales.find(item => item.key === requestsAnalyticsMonth) || informesMensuales.at(-1);
+  const datosSeccion = crearDatosPieDesdeMapa(informeSeleccionado?.secciones || new Map());
+  const datosAsignatura = crearDatosPieDesdeMapa(informeSeleccionado?.asignaturas || new Map());
+  const datosCurso = crearDatosPieDesdeMapa(informeSeleccionado?.cursos || new Map());
+  const datosProfesor = crearDatosPieDesdeMapa(informeSeleccionado?.profesores || new Map());
   const datosMensuales = crearDatosSolicitudesMensuales(solicitudes);
+  const filasSeccionMensual = crearFilasMetricaMensual(informesMensuales, "secciones");
+  const filasAsignaturaMensual = crearFilasMetricaMensual(informesMensuales, "asignaturas");
+  const filasCursoMensual = crearFilasMetricaMensual(informesMensuales, "cursos");
+  const filasProfesorMensual = crearFilasMetricaMensual(informesMensuales, "profesores");
+  const periodoSeleccionado = informeSeleccionado?.label || "Sin datos";
 
   const filasFeedback = feedback.map(item => {
     const valores = feedbackPreguntas.map(pregunta => normalizarFeedbackValor(item[pregunta.key])).filter(valor => valor !== null);
@@ -2190,6 +2300,7 @@ async function exportarAnalyticsExcel() {
     reserva.hour || "",
     reserva.usuario || "",
     reserva.curso || "",
+    reserva.aplicacion || "",
     obtenerSeccionReserva(reserva),
     obtenerAsignaturaReserva(reserva),
     reserva.cantidad || "",
@@ -2205,10 +2316,14 @@ async function exportarAnalyticsExcel() {
     ["Lowest area", metricasFeedback.debilidad]
   ];
   const filasRequestResumen = [
-    ["Total requests", solicitudes.length],
-    ["Total iPads", totalIpads],
-    ["Top section", obtenerTopCategoria(datosSeccion)],
-    ["Top subject", obtenerTopCategoria(datosAsignatura)]
+    ["Periodo del ranking", periodoSeleccionado],
+    ["Solicitudes históricas", solicitudes.length],
+    ["Solicitudes del mes", informeSeleccionado?.total || 0],
+    ["Profesores/usuarios únicos del mes", informeSeleccionado?.profesores.size || 0],
+    ["Sección con más solicitudes", obtenerTopCategoria(datosSeccion)],
+    ["Asignatura con más solicitudes", obtenerTopCategoria(datosAsignatura)],
+    ["Curso/Lugar con más solicitudes", obtenerTopCategoria(datosCurso)],
+    ["Profesor/usuario con más solicitudes", obtenerTopCategoria(datosProfesor)]
   ];
 
   const feedbackPieDatos = feedbackRatingValues.map(valor => ({ label: `${formatearRating(valor)} stars`, value: metricasFeedback.conteosGenerales[valor] || 0 }));
@@ -2234,14 +2349,18 @@ async function exportarAnalyticsExcel() {
       ${graficaPieExcel("Overall feedback distribution", feedbackPieDatos, metricasFeedback.totalCalificaciones, feedbackRatingValues.map(valor => feedbackChartColors[valor]))}
       ${tablaExcel("Feedback question summary", ["Question", "Responses", "Average"], metricasFeedback.metricas.map(item => [item.label, item.total, item.total ? item.promedio.toFixed(1) : ""]))}
       ${tablaExcel("Feedback raw data", ["Created at", "Email", "Eficiencia del préstamo", "Servicio de colaboradores", "Configuración y condición de iPads", "Average", "Comment"], filasFeedback)}
-      ${tablaExcel("Requests summary", ["Metric", "Value"], filasRequestResumen)}
-      ${graficaPieExcel("iPads by section", datosSeccion, totalIpads, requestChartColors)}
-      ${graficaPieExcel("iPads by subject", datosAsignatura, totalIpads, requestChartColors)}
-      ${graficaBarrasExcel("Requests created by month", datosMensuales, "#F08C28")}
-      ${tablaExcel("iPads by section data", ["Section", "iPads"], datosSeccion.map(item => [item.label, item.value]))}
-      ${tablaExcel("iPads by subject data", ["Subject", "iPads"], datosAsignatura.map(item => [item.label, item.value]))}
-      ${tablaExcel("Requests by month data", ["Month", "Requests"], datosMensuales.map(item => [item.label, item.value]))}
-      ${tablaExcel("Requests raw data", ["Created at", "Date", "Hour", "Name", "Course", "Section", "Subject", "iPads", "Email", "Objective", "Status"], filasSolicitudes)}
+      ${tablaExcel("Resumen de solicitudes", ["Métrica", "Valor"], filasRequestResumen)}
+      ${graficaBarrasExcel("Cantidad de solicitudes registradas por mes", datosMensuales, "#F08C28")}
+      ${graficaPieExcel(`Solicitudes por sección — ${periodoSeleccionado}`, datosSeccion, informeSeleccionado?.total || 0, requestChartColors)}
+      ${graficaBarrasHorizontalesExcel(`Solicitudes por asignatura — ${periodoSeleccionado}`, datosAsignatura, "#7c3aed")}
+      ${graficaBarrasHorizontalesExcel(`Cursos/Lugares con más solicitudes — ${periodoSeleccionado}`, datosCurso, "#0ea5e9")}
+      ${graficaBarrasHorizontalesExcel(`Profesores/usuarios con más solicitudes — ${periodoSeleccionado}`, datosProfesor, "#F08C28")}
+      ${tablaExcel("Solicitudes por mes", ["Mes", "Solicitudes"], datosMensuales.map(item => [item.label, item.value]))}
+      ${tablaExcel("Solicitudes mensuales por sección", ["Periodo", "Mes", "Sección", "Solicitudes"], filasSeccionMensual)}
+      ${tablaExcel("Solicitudes mensuales por asignatura", ["Periodo", "Mes", "Asignatura", "Solicitudes"], filasAsignaturaMensual)}
+      ${tablaExcel("Solicitudes mensuales por Curso/Lugar", ["Periodo", "Mes", "Curso/Lugar", "Solicitudes"], filasCursoMensual)}
+      ${tablaExcel("Solicitudes mensuales por profesor/usuario", ["Periodo", "Mes", "Correo electrónico", "Solicitudes"], filasProfesorMensual)}
+      ${tablaExcel("Datos completos de solicitudes", ["Creada el", "Fecha solicitada", "Hora", "Nombre", "Curso/Lugar", "Aplicación", "Sección", "Asignatura", "iPads", "Correo", "Objetivo", "Estado"], filasSolicitudes)}
     </body>
     </html>`;
 
@@ -2416,15 +2535,24 @@ document.getElementById("seccionSelectOptions").addEventListener("click", e => {
   const opcion = e.target.closest(".custom-select-option");
   if (opcion) seleccionarSeccionDesdeOpcion(opcion);
 });
+document.getElementById("requestsMonthSelectButton").addEventListener("click", alternarRequestsMonthSelect);
+document.getElementById("requestsMonthSelectOptions").addEventListener("click", e => {
+  const opcion = e.target.closest(".custom-select-option");
+  if (opcion) seleccionarMesAnalytics(opcion);
+});
 document.addEventListener("click", e => {
   const select = document.getElementById("seccionSelect");
   if (select && !select.contains(e.target)) cerrarSeccionSelect();
+
+  const monthSelect = document.getElementById("requestsMonthSelect");
+  if (monthSelect && !monthSelect.contains(e.target)) cerrarRequestsMonthSelect();
 
   const session = document.querySelector(".sidebar-session");
   if (session && !session.contains(e.target)) cerrarMenuAdminMovil();
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") cerrarSeccionSelect();
+  if (e.key === "Escape") cerrarRequestsMonthSelect();
   if (e.key === "Escape") cerrarMenuAdminMovil();
 });
 window.addEventListener("resize", actualizarIndicadorScrollSolicitud);

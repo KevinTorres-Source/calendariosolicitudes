@@ -2121,7 +2121,7 @@ function tablaExcel(titulo, encabezados, filas) {
       <tbody>
         ${filas.length
           ? filas.map(fila => `<tr>${fila.map(valor => `<td>${excelValor(valor)}</td>`).join("")}</tr>`).join("")
-          : `<tr><td colspan="${encabezados.length}">No data</td></tr>`}
+          : `<tr><td colspan="${encabezados.length}">Sin datos disponibles</td></tr>`}
       </tbody>
     </table>`;
 }
@@ -2142,7 +2142,7 @@ function arcoSvg(cx, cy, radio, inicio, fin) {
 }
 
 function graficaPieExcel(titulo, datos, total, colores) {
-  if (!datos.length || !total) return `<h2>${excelValor(titulo)}</h2><p>No data</p>`;
+  if (!datos.length || !total) return `<h2>${excelValor(titulo)}</h2><p>Sin datos disponibles</p>`;
 
   let inicio = 0;
   const segmentos = datos.map((item, index) => {
@@ -2174,7 +2174,7 @@ function graficaPieExcel(titulo, datos, total, colores) {
 }
 
 function graficaBarrasExcel(titulo, datos, color = "#1C4169") {
-  if (!datos.length) return `<h2>${excelValor(titulo)}</h2><p>No data</p>`;
+  if (!datos.length) return `<h2>${excelValor(titulo)}</h2><p>Sin datos disponibles</p>`;
 
   const width = Math.max(520, datos.length * 78);
   const height = 280;
@@ -2199,7 +2199,7 @@ function graficaBarrasExcel(titulo, datos, color = "#1C4169") {
 }
 
 function graficaBarrasHorizontalesExcel(titulo, datos, color = "#7c3aed") {
-  if (!datos.length) return `<h2>${excelValor(titulo)}</h2><p>No data</p>`;
+  if (!datos.length) return `<h2>${excelValor(titulo)}</h2><p>Sin datos disponibles</p>`;
 
   const visibles = datos.slice(0, 15);
   const width = 720;
@@ -2229,8 +2229,58 @@ function crearFilasMetricaMensual(informes, propiedad) {
   );
 }
 
+function traducirEstadoReporte(estado) {
+  const clave = String(estado || "aprobado").trim().toLowerCase();
+  const traducciones = {
+    approved: "Aprobado",
+    aprobado: "Aprobado",
+    pending: "Pendiente",
+    pendiente: "Pendiente",
+    rejected: "Rechazado",
+    rechazado: "Rechazado",
+    cancelled: "Cancelado",
+    canceled: "Cancelado",
+    cancelado: "Cancelado"
+  };
+  return traducciones[clave] || estado || "Aprobado";
+}
+
+function excelXmlValor(valor) {
+  return String(valor ?? "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function excelXmlCelda(valor, estilo = "Dato") {
+  const esNumero = typeof valor === "number" && Number.isFinite(valor);
+  return `<Cell ss:StyleID="${estilo}"><Data ss:Type="${esNumero ? "Number" : "String"}">${excelXmlValor(valor)}</Data></Cell>`;
+}
+
+function excelXmlFila(valores, estilo = "Dato") {
+  return `<Row>${valores.map(valor => excelXmlCelda(valor, estilo)).join("")}</Row>`;
+}
+
+function excelXmlSeccion(titulo, encabezados, filas, columnas) {
+  const celdasTitulo = `<Cell ss:StyleID="Seccion" ss:MergeAcross="${Math.max(columnas - 1, 0)}"><Data ss:Type="String">${excelXmlValor(titulo)}</Data></Cell>`;
+  return `<Row ss:Height="25">${celdasTitulo}</Row>${excelXmlFila(encabezados, "Encabezado")}${filas.map(fila => excelXmlFila(fila)).join("")}<Row ss:Height="10"/>`;
+}
+
+function excelXmlHoja(nombre, titulo, subtitulo, secciones, anchos) {
+  const totalColumnas = Math.max(1, ...secciones.map(seccion => seccion.encabezados.length));
+  const columnas = Array.from({ length: totalColumnas }, (_, indice) => `<Column ss:AutoFitWidth="0" ss:Width="${anchos[indice] || 110}"/>`).join("");
+  const contenido = secciones.map(seccion => excelXmlSeccion(seccion.titulo, seccion.encabezados, seccion.filas, totalColumnas)).join("");
+  return `<Worksheet ss:Name="${excelXmlValor(nombre)}"><Table>${columnas}<Row ss:Height="34"><Cell ss:StyleID="Titulo" ss:MergeAcross="${totalColumnas - 1}"><Data ss:Type="String">${excelXmlValor(titulo)}</Data></Cell></Row><Row ss:Height="21"><Cell ss:StyleID="Subtitulo" ss:MergeAcross="${totalColumnas - 1}"><Data ss:Type="String">${excelXmlValor(subtitulo)}</Data></Cell></Row><Row ss:Height="10"/>${contenido}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>4</SplitHorizontal><TopRowBottomPane>4</TopRowBottomPane><ProtectObjects>False</ProtectObjects><ProtectScenarios>False</ProtectScenarios></WorksheetOptions></Worksheet>`;
+}
+
+function crearLibroExcelAnalytics(hojas) {
+  return `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><DocumentProperties xmlns="urn:schemas-microsoft-com:office:office"><Title>Reporte de analítica</Title><Author>Colegio Colombo Americano</Author><Company>Colegio Colombo Americano</Company></DocumentProperties><Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Top" ss:WrapText="1"/><Font ss:FontName="Arial" ss:Size="10"/><Interior/><NumberFormat/><Protection/></Style><Style ss:ID="Titulo"><Alignment ss:Vertical="Center"/><Font ss:FontName="Arial" ss:Size="18" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1C4169" ss:Pattern="Solid"/></Style><Style ss:ID="Subtitulo"><Alignment ss:Vertical="Center"/><Font ss:FontName="Arial" ss:Size="10" ss:Color="#475467"/><Interior ss:Color="#EEF3F8" ss:Pattern="Solid"/></Style><Style ss:ID="Seccion"><Alignment ss:Vertical="Center"/><Font ss:FontName="Arial" ss:Size="12" ss:Bold="1" ss:Color="#1C4169"/><Interior ss:Color="#DCE8F3" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#F08C28"/></Borders></Style><Style ss:ID="Encabezado"><Alignment ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Arial" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1C4169" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FFFFFF"/></Borders></Style><Style ss:ID="Dato"><Alignment ss:Vertical="Top" ss:WrapText="1"/><Font ss:FontName="Arial" ss:Size="9"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E4E7EC"/></Borders></Style></Styles>${hojas.join("")}</Workbook>`;
+}
+
 function graficaLineaFeedbackExcel(tendencia) {
-  if (!tendencia.length) return "<h2>Feedback trend</h2><p>No data</p>";
+  if (!tendencia.length) return "<h2>Tendencia de la retroalimentación</h2><p>Sin datos disponibles</p>";
 
   const width = 620;
   const height = 250;
@@ -2241,14 +2291,14 @@ function graficaLineaFeedbackExcel(tendencia) {
     return { x, y, ...item };
   });
   const path = puntos.map((punto, index) => `${index ? "L" : "M"} ${punto.x.toFixed(1)} ${punto.y.toFixed(1)}`).join(" ");
-  const circles = puntos.map(punto => `<circle cx="${punto.x.toFixed(1)}" cy="${punto.y.toFixed(1)}" r="4" fill="#ffffff" stroke="#0ea5e9" stroke-width="3"></circle>`).join("");
+  const circles = puntos.map(punto => `<circle cx="${punto.x.toFixed(1)}" cy="${punto.y.toFixed(1)}" r="4" fill="#ffffff" stroke="#1C4169" stroke-width="3"></circle>`).join("");
 
   return `
-    <h2>Feedback trend</h2>
+    <h2>Tendencia de la retroalimentación</h2>
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="#cfd8e6" stroke-width="2"></line>
       <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#cfd8e6" stroke-width="2"></line>
-      <path d="${path}" fill="none" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="${path}" fill="none" stroke="#1C4169" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
       ${circles}
       <text x="${padding - 10}" y="${padding + 4}" text-anchor="end" font-family="Arial" font-size="12" fill="#667085">5</text>
       <text x="${padding - 10}" y="${height - padding + 4}" text-anchor="end" font-family="Arial" font-size="12" fill="#667085">1</text>
@@ -2258,7 +2308,7 @@ function graficaLineaFeedbackExcel(tendencia) {
 async function exportarAnalyticsExcel() {
   if (!modoAdmin) return;
   const status = document.getElementById("adminStatus");
-  status.textContent = "Preparing Excel export...";
+  status.textContent = "Preparing Excel report...";
 
   const [feedbackData, reservasData] = await Promise.all([obtenerFeedbackAdmin(), obtenerReservas()]);
   if (feedbackData.error) { status.textContent = feedbackData.error; return; }
@@ -2306,14 +2356,14 @@ async function exportarAnalyticsExcel() {
     reserva.cantidad || "",
     reserva.correo || "",
     obtenerObjetivoUsoReserva(reserva),
-    reserva.estado || "aprobado"
+    traducirEstadoReporte(reserva.estado)
   ]);
 
   const filasFeedbackResumen = [
-    ["Total responses", feedback.length],
-    ["Overall average", metricasFeedback.promedioGeneral ? metricasFeedback.promedioGeneral.toFixed(1) : ""],
-    ["Positive ratings", feedback.length ? `${metricasFeedback.favorables}%` : ""],
-    ["Lowest area", metricasFeedback.debilidad]
+    ["Total de respuestas", feedback.length],
+    ["Promedio general (sobre 5)", metricasFeedback.promedioGeneral ? Number(metricasFeedback.promedioGeneral.toFixed(1)) : ""],
+    ["Calificaciones positivas", feedback.length ? `${metricasFeedback.favorables}%` : ""],
+    ["Área con oportunidad de mejora", metricasFeedback.debilidad]
   ];
   const filasRequestResumen = [
     ["Periodo del ranking", periodoSeleccionado],
@@ -2326,54 +2376,109 @@ async function exportarAnalyticsExcel() {
     ["Profesor/usuario con más solicitudes", obtenerTopCategoria(datosProfesor)]
   ];
 
-  const feedbackPieDatos = feedbackRatingValues.map(valor => ({ label: `${formatearRating(valor)} stars`, value: metricasFeedback.conteosGenerales[valor] || 0 }));
-  const html = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body { font-family: Arial, sans-serif; color:#1f2937; }
-        h1 { color:#1C4169; }
-        h2 { color:#1C4169; margin-top:28px; }
-        table { border-collapse: collapse; margin: 10px 0 22px; width: 100%; }
-        th { background:#1C4169; color:#ffffff; font-weight:700; }
-        th, td { border:1px solid #d8e1ee; padding:7px; font-size:12px; vertical-align:top; }
-        td { background:#ffffff; }
-      </style>
-    </head>
-    <body>
-      <h1>Analytics Export</h1>
-      <p>Generated: ${excelValor(new Date().toLocaleString("en-US"))}</p>
-      ${tablaExcel("Feedback summary", ["Metric", "Value"], filasFeedbackResumen)}
-      ${graficaLineaFeedbackExcel(metricasFeedback.tendencia)}
-      ${graficaPieExcel("Overall feedback distribution", feedbackPieDatos, metricasFeedback.totalCalificaciones, feedbackRatingValues.map(valor => feedbackChartColors[valor]))}
-      ${tablaExcel("Feedback question summary", ["Question", "Responses", "Average"], metricasFeedback.metricas.map(item => [item.label, item.total, item.total ? item.promedio.toFixed(1) : ""]))}
-      ${tablaExcel("Feedback raw data", ["Created at", "Email", "Eficiencia del préstamo", "Servicio de colaboradores", "Configuración y condición de iPads", "Average", "Comment"], filasFeedback)}
-      ${tablaExcel("Resumen de solicitudes", ["Métrica", "Valor"], filasRequestResumen)}
-      ${graficaBarrasExcel("Cantidad de solicitudes registradas por mes", datosMensuales, "#F08C28")}
-      ${graficaPieExcel(`Solicitudes por sección — ${periodoSeleccionado}`, datosSeccion, informeSeleccionado?.total || 0, requestChartColors)}
-      ${graficaBarrasHorizontalesExcel(`Solicitudes por asignatura — ${periodoSeleccionado}`, datosAsignatura, "#7c3aed")}
-      ${graficaBarrasHorizontalesExcel(`Cursos/Lugares con más solicitudes — ${periodoSeleccionado}`, datosCurso, "#0ea5e9")}
-      ${graficaBarrasHorizontalesExcel(`Profesores/usuarios con más solicitudes — ${periodoSeleccionado}`, datosProfesor, "#F08C28")}
-      ${tablaExcel("Solicitudes por mes", ["Mes", "Solicitudes"], datosMensuales.map(item => [item.label, item.value]))}
-      ${tablaExcel("Solicitudes mensuales por sección", ["Periodo", "Mes", "Sección", "Solicitudes"], filasSeccionMensual)}
-      ${tablaExcel("Solicitudes mensuales por asignatura", ["Periodo", "Mes", "Asignatura", "Solicitudes"], filasAsignaturaMensual)}
-      ${tablaExcel("Solicitudes mensuales por Curso/Lugar", ["Periodo", "Mes", "Curso/Lugar", "Solicitudes"], filasCursoMensual)}
-      ${tablaExcel("Solicitudes mensuales por profesor/usuario", ["Periodo", "Mes", "Correo electrónico", "Solicitudes"], filasProfesorMensual)}
-      ${tablaExcel("Datos completos de solicitudes", ["Creada el", "Fecha solicitada", "Hora", "Nombre", "Curso/Lugar", "Aplicación", "Sección", "Asignatura", "iPads", "Correo", "Objetivo", "Estado"], filasSolicitudes)}
-    </body>
-    </html>`;
-
-  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const generado = `Generado el ${new Date().toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" })}`;
+  const hojas = [
+    excelXmlHoja("Resumen ejecutivo", "Reporte ejecutivo de analítica", generado, [
+      { titulo: "Indicadores de solicitudes", encabezados: ["Indicador", "Resultado"], filas: filasRequestResumen },
+      { titulo: "Indicadores de retroalimentación", encabezados: ["Indicador", "Resultado"], filas: filasFeedbackResumen }
+    ], [245, 220]),
+    excelXmlHoja("Solicitudes", "Análisis y detalle de solicitudes", `${generado} · Periodo destacado: ${periodoSeleccionado}`, [
+      { titulo: "Resumen del periodo", encabezados: ["Indicador", "Resultado"], filas: filasRequestResumen },
+      { titulo: "Solicitudes registradas por mes", encabezados: ["Mes", "Cantidad"], filas: datosMensuales.map(item => [item.label, item.value]) },
+      { titulo: "Solicitudes mensuales por sección", encabezados: ["Periodo", "Mes", "Sección", "Cantidad"], filas: filasSeccionMensual },
+      { titulo: "Solicitudes mensuales por asignatura", encabezados: ["Periodo", "Mes", "Asignatura", "Cantidad"], filas: filasAsignaturaMensual },
+      { titulo: "Solicitudes mensuales por curso o lugar", encabezados: ["Periodo", "Mes", "Curso o lugar", "Cantidad"], filas: filasCursoMensual },
+      { titulo: "Solicitudes mensuales por profesor o usuario", encabezados: ["Periodo", "Mes", "Correo electrónico", "Cantidad"], filas: filasProfesorMensual },
+      { titulo: "Detalle individual de solicitudes", encabezados: ["Fecha de creación", "Fecha solicitada", "Hora", "Nombre", "Curso o lugar", "Aplicación", "Sección", "Asignatura", "Cantidad de iPads", "Correo electrónico", "Objetivo de uso", "Estado"], filas: filasSolicitudes }
+    ], [125, 115, 90, 145, 125, 145, 110, 145, 95, 190, 260, 100]),
+    excelXmlHoja("Retroalimentación", "Análisis y detalle de retroalimentación", generado, [
+      { titulo: "Resumen general", encabezados: ["Indicador", "Resultado"], filas: filasFeedbackResumen },
+      { titulo: "Resultados por pregunta", encabezados: ["Pregunta", "Respuestas", "Promedio sobre 5"], filas: metricasFeedback.metricas.map(item => [item.question || item.label, item.total, item.total ? Number(item.promedio.toFixed(1)) : ""]) },
+      { titulo: "Detalle individual de respuestas", encabezados: ["Fecha de creación", "Correo electrónico", "Eficiencia del préstamo", "Servicio de colaboradores", "Configuración y condición de iPads", "Promedio", "Comentario"], filas: filasFeedback }
+    ], [130, 190, 145, 145, 190, 90, 300])
+  ];
+  const contenidoExcel = crearLibroExcelAnalytics(hojas);
+  const blob = new Blob(["\ufeff", contenidoExcel], { type: "application/vnd.ms-excel;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const enlace = document.createElement("a");
   enlace.href = url;
-  enlace.download = `analytics-${fechaISO(new Date())}.xls`;
+  enlace.download = `reporte-analitica-${fechaISO(new Date())}.xls`;
   document.body.appendChild(enlace);
   enlace.click();
   enlace.remove();
   URL.revokeObjectURL(url);
-  status.textContent = "Excel export generated.";
+  status.textContent = "Excel report generated successfully.";
+}
+
+async function exportarAnalyticsPdf() {
+  if (!modoAdmin) return;
+  const status = document.getElementById("adminStatus");
+  const ventana = window.open("", "_blank");
+  if (!ventana) {
+    status.textContent = "The browser blocked the report window. Enable pop-ups and try again.";
+    return;
+  }
+  ventana.document.write("<p style='font-family:Arial;padding:24px'>Preparing executive report...</p>");
+  status.textContent = "Preparing executive PDF report...";
+
+  const [feedbackData, reservasData] = await Promise.all([obtenerFeedbackAdmin(), obtenerReservas()]);
+  if (feedbackData.error) {
+    ventana.close();
+    status.textContent = feedbackData.error;
+    return;
+  }
+
+  const feedback = Array.isArray(feedbackData) ? feedbackData : [];
+  const solicitudes = Array.isArray(reservasData) ? reservasData : [];
+  const metricas = calcularMetricasFeedback(feedback);
+  const informes = crearInformeMensualSolicitudes(solicitudes);
+  const informe = informes.find(item => item.key === requestsAnalyticsMonth) || informes.at(-1);
+  const periodo = informe?.label || "Sin datos";
+  const porSeccion = crearDatosPieDesdeMapa(informe?.secciones || new Map());
+  const porAsignatura = crearDatosPieDesdeMapa(informe?.asignaturas || new Map());
+  const porCurso = crearDatosPieDesdeMapa(informe?.cursos || new Map());
+  const porProfesor = crearDatosPieDesdeMapa(informe?.profesores || new Map());
+  const porMes = crearDatosSolicitudesMensuales(solicitudes);
+  const distribucion = feedbackRatingValues.map(valor => ({ label: `${formatearRating(valor)} estrellas`, value: metricas.conteosGenerales[valor] || 0 }));
+  const coloresPdf = ["#1C4169", "#F08C28", "#475467", "#667085", "#D9E2EC"];
+  const filasSolicitudes = solicitudes.map(item => [item.creadoEn || "", item.fecha || "", item.hour || "", item.usuario || "", item.curso || "", item.aplicacion || "", obtenerSeccionReserva(item), obtenerAsignaturaReserva(item), item.cantidad || "", item.correo || "", obtenerObjetivoUsoReserva(item), traducirEstadoReporte(item.estado)]);
+  const filasFeedback = feedback.map(item => {
+    const valores = feedbackPreguntas.map(pregunta => normalizarFeedbackValor(item[pregunta.key])).filter(valor => valor !== null);
+    const promedio = valores.length ? (valores.reduce((suma, valor) => suma + valor, 0) / valores.length).toFixed(1) : "";
+    return [item.creadoEn || "", item.correo || "", item.eficienciaPrestamo || "", item.colaboradores || "", item.configuracionIpads || "", promedio, item.comentario || ""];
+  });
+  const tarjeta = (etiqueta, valor, nota = "") => `<article class="kpi"><span>${excelValor(etiqueta)}</span><strong>${excelValor(valor)}</strong><small>${excelValor(nota)}</small></article>`;
+  const fechaReporte = new Date().toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" });
+  const logoColegio = new URL("images/Logo1.jpeg", window.location.href).href;
+  const html = `<!doctype html><html lang="es"><head><meta charset="UTF-8"><title>Reporte ejecutivo de analítica</title><style>
+    @page { size: A4 landscape; margin: 13mm; }
+    * { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; } body { margin:0; color:#243044; font-family:Arial,sans-serif; font-size:10px; }
+    .portada { min-height:175mm; position:relative; display:grid; grid-template-columns:190px 1fr; align-items:center; gap:35px; padding:22mm; overflow:hidden; background:#FFFFFF; border-top:12px solid #1C4169; border-bottom:12px solid #F08C28; break-after:page; }
+    .portada::after { content:""; position:absolute; right:-85px; top:-85px; width:240px; height:240px; border-radius:50%; background:#1C4169; opacity:.05; }
+    .portada-logo { width:175px; height:175px; object-fit:contain; padding:9px; border-radius:50%; background:#fff; box-shadow:0 12px 35px rgba(28,65,105,.18); }
+    .portada .marca { color:#F08C28; font-size:12px; font-weight:700; letter-spacing:1.7px; text-transform:uppercase; } .portada h1 { max-width:700px; margin:16px 0 10px; color:#1C4169; font-size:36px; line-height:1.08; } .portada .subtitulo { margin:0 0 24px; color:#475467; font-size:16px; line-height:1.45; } .portada .fecha { color:#667085; font-size:11px; }
+    .ejes-portada { display:flex; gap:9px; margin:20px 0; } .eje-chip { padding:8px 12px; border:1px solid #D9E2EC; border-radius:20px; color:#1C4169; background:#F5F7FB; font-weight:700; } .eje-chip.requests { border-left:4px solid #F08C28; } .eje-chip.feedback { border-left:4px solid #1C4169; }
+    .pagina { break-before:page; } h1,h2,h3 { color:#1C4169; } h1 { font-size:25px; margin:0 0 5px; } h2 { margin:0 0 12px; font-size:17px; border-bottom:3px solid #F08C28; padding-bottom:6px; } h3 { font-size:12px; margin:0 0 7px; }
+    .meta { color:#667085; margin:0 0 16px; } .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:12px 0 18px; } .kpi { min-height:82px; padding:13px; border:1px solid #D8E1EE; border-radius:9px; background:#F7FAFC; } .kpi span,.kpi small { display:block; color:#667085; } .kpi strong { display:block; margin:8px 0 5px; color:#1C4169; font-size:23px; }
+    .capitulo { display:flex; align-items:center; gap:14px; margin-bottom:14px; padding:14px 16px; border-radius:7px; color:#fff; background:#1C4169; } .capitulo.requests { border-left:7px solid #F08C28; } .capitulo.feedback { border-left:7px solid #D9E2EC; } .capitulo-numero { font-size:31px; font-weight:800; opacity:.72; } .capitulo h1 { margin:0; color:#fff; font-size:22px; } .capitulo p { margin:3px 0 0; opacity:.9; }
+    .definicion { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:0 0 16px; } .definicion article { padding:13px; border:1px solid #D8E1EE; border-radius:9px; } .definicion strong { display:block; margin-bottom:5px; color:#1C4169; font-size:12px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; } .panel { break-inside:avoid; padding:12px; border:1px solid #D8E1EE; border-radius:9px; background:#fff; } .panel svg { max-width:100%; height:auto; }
+    table { width:100%; border-collapse:collapse; margin:7px 0 14px; table-layout:fixed; } thead { display:table-header-group; } th { padding:7px 6px; color:#fff; background:#1C4169; text-align:left; font-size:8px; } td { padding:6px; border-bottom:1px solid #E4E7EC; vertical-align:top; overflow-wrap:anywhere; font-size:8px; } tbody tr:nth-child(even) td { background:#F8FAFC; } tr { break-inside:avoid; }
+    .nota { padding:10px 12px; border-left:4px solid #F08C28; background:#FFF7ED; color:#7C4A16; } .detalle { font-size:8px; } .detalle h2 { margin-top:8px; }
+    @media screen { body { max-width:1120px; margin:auto; padding:18px; background:#eef2f6; } .portada,.pagina { margin:0 auto 18px; padding:28px; background-color:#fff; box-shadow:0 8px 28px rgba(28,65,105,.14); } }
+  </style></head><body>
+    <section class="portada"><img class="portada-logo" src="${excelValor(logoColegio)}" alt="Logo del Colegio Americano de Bogotá Bilingüe"><div><div class="marca">Colegio Americano de Bogotá Bilingüe</div><h1>Reporte ejecutivo de analítica</h1><p class="subtitulo">Dos líneas independientes de análisis para comprender la demanda del servicio y la experiencia de sus usuarios.</p><div class="ejes-portada"><span class="eje-chip requests">01 · Solicitudes</span><span class="eje-chip feedback">02 · Retroalimentación</span></div><p class="fecha">Fecha de generación: ${excelValor(fechaReporte)}</p></div></section>
+    <section class="pagina"><div class="capitulo requests"><span class="capitulo-numero">01</span><div><h1>Solicitudes (Requests)</h1><p>Análisis operativo de la demanda, frecuencia y distribución de las reservas.</p></div></div><div class="definicion"><article><strong>¿Qué se analiza?</strong>Volumen de solicitudes, usuarios, secciones, asignaturas, cursos o lugares y comportamiento mensual.</article><article><strong>¿Para qué sirve?</strong>Permite planear capacidad, identificar concentración de demanda y anticipar necesidades operativas.</article></div><div class="kpis">${tarjeta("Solicitudes históricas", solicitudes.length)}${tarjeta("Solicitudes del periodo", informe?.total || 0, periodo)}${tarjeta("Usuarios únicos", informe?.profesores.size || 0, periodo)}${tarjeta("Sección principal", obtenerTopCategoria(porSeccion), periodo)}</div><p class="nota">Estos indicadores describen el uso del servicio. No representan satisfacción ni percepción de calidad.</p></section>
+    <section class="pagina"><div class="capitulo requests"><span class="capitulo-numero">01</span><div><h1>Solicitudes - análisis detallado</h1><p>Periodo destacado: ${excelValor(periodo)}</p></div></div><div class="grid"><div class="panel">${graficaBarrasExcel("Evolución mensual de solicitudes", porMes, "#F08C28")}</div><div class="panel">${graficaPieExcel("Distribución por sección", porSeccion, informe?.total || 0, coloresPdf)}</div><div class="panel">${graficaBarrasHorizontalesExcel("Solicitudes por asignatura", porAsignatura, "#1C4169")}</div><div class="panel">${graficaBarrasHorizontalesExcel("Solicitudes por curso o lugar", porCurso, "#475467")}</div><div class="panel">${graficaBarrasHorizontalesExcel("Solicitudes por profesor o usuario", porProfesor, "#F08C28")}</div></div></section>
+    <section class="pagina"><div class="capitulo feedback"><span class="capitulo-numero">02</span><div><h1>Retroalimentación (Feedback)</h1><p>Análisis de satisfacción, percepción de calidad y oportunidades de mejora.</p></div></div><div class="definicion"><article><strong>¿Qué se analiza?</strong>Calificaciones del proceso, atención de colaboradores, configuración de iPads y comentarios de los usuarios.</article><article><strong>¿Para qué sirve?</strong>Permite evaluar la experiencia del servicio y priorizar acciones concretas de mejora.</article></div><div class="kpis">${tarjeta("Respuestas recibidas", feedback.length)}${tarjeta("Promedio general", metricas.promedioGeneral ? `${metricas.promedioGeneral.toFixed(1)} / 5` : "Sin datos")}${tarjeta("Calificaciones positivas", feedback.length ? `${metricas.favorables}%` : "Sin datos")}${tarjeta("Oportunidad de mejora", metricas.debilidad || "Sin datos")}</div><p class="nota">Estos resultados reflejan percepción y satisfacción. No deben sumarse ni compararse directamente con el volumen de solicitudes.</p><div class="grid"><div class="panel">${graficaLineaFeedbackExcel(metricas.tendencia)}</div><div class="panel">${graficaPieExcel("Distribución general de calificaciones", distribucion, metricas.totalCalificaciones, coloresPdf)}</div></div>${tablaExcel("Resultados por pregunta", ["Pregunta", "Respuestas", "Promedio sobre 5"], metricas.metricas.map(item => [item.label, item.total, item.total ? item.promedio.toFixed(1) : ""]))}</section>
+    <section class="pagina detalle"><h2>Anexo 1 · Detalle individual de solicitudes</h2>${tablaExcel("Solicitudes", ["Creación", "Fecha solicitada", "Hora", "Nombre", "Curso/lugar", "Aplicación", "Sección", "Asignatura", "iPads", "Correo", "Objetivo", "Estado"], filasSolicitudes)}</section>
+    <section class="pagina detalle"><h2>Anexo 2 · Detalle individual de retroalimentación</h2>${tablaExcel("Respuestas", ["Creación", "Correo", "Eficiencia", "Colaboradores", "Configuración de iPads", "Promedio", "Comentario"], filasFeedback)}</section>
+    <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),350));<\/script></body></html>`;
+
+  ventana.document.open();
+  ventana.document.write(html);
+  ventana.document.close();
+  status.textContent = "PDF report ready. Select “Save as PDF” in the print dialog.";
 }
 
 async function renderPanelFeedback() {
@@ -2597,6 +2702,7 @@ document.getElementById("adminOverlay").addEventListener("click", e => {
 document.getElementById("adminTabFeedback").addEventListener("click", () => cambiarAdminAnalyticsTab("feedback"));
 document.getElementById("adminTabRequests").addEventListener("click", () => cambiarAdminAnalyticsTab("requests"));
 document.getElementById("btnExportarAnalytics").addEventListener("click", exportarAnalyticsExcel);
+document.getElementById("btnExportarAnalyticsPdf").addEventListener("click", exportarAnalyticsPdf);
 document.getElementById("btnCerrarSolicitudesRecientes").addEventListener("click", cerrarSolicitudesRecientes);
 document.getElementById("recentRequestsOverlay").addEventListener("click", e => {
   if (e.target === document.getElementById("recentRequestsOverlay")) e.stopPropagation();

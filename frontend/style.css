@@ -848,7 +848,6 @@ body {
   border-radius: 6px;
   padding: 3px 5px;
 }
-.cell-reserva-item.etiqueta-color-verde { background: #dcfce7; border-color: #86d39b; }
 .cell-reserva-item.etiqueta-color-azul { background: #dbeafe; border-color: #8cb8ef; }
 .cell-reserva-item.etiqueta-color-amarillo { background: #fef9c3; border-color: #e8d96e; }
 .cell-reserva-item.etiqueta-color-naranja { background: #ffedd5; border-color: #f1b976; }

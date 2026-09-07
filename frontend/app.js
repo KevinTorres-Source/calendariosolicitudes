@@ -132,12 +132,13 @@ function correoInstitucionalValido(correo) {
 }
 
 function esSolicitudUsuarioInterno(reserva) {
-  return reserva?.origenSolicitud === "usuario-interno";
+  if (reserva?.origenSolicitud === "usuario-interno") return true;
+  const nombre = String(reserva?.usuario || "").trim().toLowerCase();
+  return ["preescolar", "primaria", "secundaria"].some(item => nombre === item || nombre.startsWith(`${item} `));
 }
 
 const coloresEtiquetaSolicitud = [
   { valor: "", nombre: "Sin etiqueta" },
-  { valor: "verde", nombre: "Verde" },
   { valor: "azul", nombre: "Azul" },
   { valor: "amarillo", nombre: "Amarillo" },
   { valor: "naranja", nombre: "Naranja" },

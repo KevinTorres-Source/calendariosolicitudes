@@ -1305,7 +1305,9 @@ async function asignarColorSolicitud(id, etiquetaColor) {
       const res = await fetch(`${API}/reservas/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "Authorization": token },
-        body: JSON.stringify({ etiquetaColor })
+        // Se incluye el estado actual para mantener compatibilidad con
+        // instalaciones cuyo backend todavía valida este campo en PUT.
+        body: JSON.stringify({ etiquetaColor, estado: pendingAdminReservasHorario.find(item => item.id === id)?.estado || "aprobado" })
       });
       const data = await res.json();
       if (!res.ok || data.error) {

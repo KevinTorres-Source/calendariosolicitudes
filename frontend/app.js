@@ -131,6 +131,20 @@ function correoInstitucionalValido(correo) {
   return /^[^\s@]+@colamericano\.edu\.co$/i.test(String(correo || "").trim());
 }
 
+function esSolicitudUsuarioInterno(reserva) {
+  return reserva?.origenSolicitud === "usuario-interno";
+}
+
+const coloresEtiquetaSolicitud = [
+  { valor: "", nombre: "Sin etiqueta" },
+  { valor: "verde", nombre: "Verde" },
+  { valor: "azul", nombre: "Azul" },
+  { valor: "amarillo", nombre: "Amarillo" },
+  { valor: "naranja", nombre: "Naranja" },
+  { valor: "morado", nombre: "Morado" },
+  { valor: "rojo", nombre: "Rojo" }
+];
+
 function normalizarReserva(reserva) {
   if (!reserva || typeof reserva !== "object") return reserva;
 
@@ -330,7 +344,10 @@ async function crearReservaAPI(payload) {
     creadoEn: new Date().toISOString(),
     ...payload,
     cantidad: capacidad.cantidadSolicitada,
-    estado: "aprobado"
+    estado: "aprobado",
+    ...(rol === "coordinador" && ["preescolar", "primaria", "secundaria"].includes(usuarioSesion.toLowerCase())
+      ? { origenSolicitud: "usuario-interno", usuarioOrigen: usuarioSesion.toLowerCase() }
+      : {})
   });
 
   if (backendDisponible) {
@@ -944,8 +961,20 @@ function renderReservasHorario(reservasHorario) {
     const detalleAdmin = modoAdmin && (seccion || asignatura)
       ? `<span class="cell-reserva-admin-meta">${escaparHTML([seccion, asignatura].filter(Boolean).join(" · "))}</span>`
       : "";
+    const sesionActiva = modoAdmin || rol === "coordinador";
+    const colorEtiqueta = sesionActiva && coloresEtiquetaSolicitud.some(item => item.valor === reserva.etiquetaColor)
+      ? reserva.etiquetaColor
+      : "";
+    const claseColor = colorEtiqueta
+      ? ` etiqueta-color-${colorEtiqueta}`
+      : (sesionActiva && esSolicitudUsuarioInterno(reserva) ? " solicitud-usuario-interno" : "");
+    const tituloColor = colorEtiqueta
+      ? ` title="Solicitud etiquetada en color ${escaparHTML(colorEtiqueta)}"`
+      : (sesionActiva && esSolicitudUsuarioInterno(reserva)
+        ? ` title="Solicitud creada desde el usuario ${escaparHTML(reserva.usuarioOrigen || "interno")}"`
+        : "");
     return `
-      <span class="cell-reserva-item">
+      <span class="cell-reserva-item${claseColor}"${tituloColor}>
         <span class="cell-reserva-persona">${escaparHTML(reserva.usuario)}${reserva.curso ? ` - ${escaparHTML(reserva.curso)}` : ""}</span>
         ${detalleAdmin}
         ${detalleIpads}
@@ -1193,7 +1222,7 @@ function renderModalReservaAdmin() {
   const status = document.getElementById("reservaAdminStatus");
 
   titulo.textContent = `${pendingAdminFecha} · ${pendingAdminHour}`;
-  texto.textContent = "Puedes rechazar una solicitud puntual o bloquear esta hora conservando las reservas ya realizadas.";
+  texto.textContent = "Puedes asignar una etiqueta de color, rechazar una solicitud puntual o bloquear esta hora conservando las reservas.";
   status.textContent = "";
 
   lista.innerHTML = pendingAdminReservasHorario.map(reserva => {
@@ -1239,6 +1268,16 @@ function renderModalReservaAdmin() {
           <span class="reserva-admin-label">Objetivo de uso</span>
           <p>${escaparHTML(objetivoUso || "Sin objetivo de uso")}</p>
         </div>
+        <div class="reserva-admin-note reserva-color-control">
+          <span class="reserva-admin-label">Asignar etiqueta de color</span>
+          <div class="reserva-color-options" role="group" aria-label="Color para la solicitud de ${escaparHTML(reserva.usuario)}">
+            ${coloresEtiquetaSolicitud.map(color => `
+              <button class="reserva-color-option color-${color.valor || "ninguno"}${(reserva.etiquetaColor || "") === color.valor ? " selected" : ""}"
+                type="button" data-color-reserva-id="${reserva.id}" data-color="${color.valor}"
+                title="${color.nombre}" aria-label="${color.nombre}" aria-pressed="${(reserva.etiquetaColor || "") === color.valor}"></button>
+            `).join("")}
+          </div>
+        </div>
       </div>
     </article>
   `;
@@ -1247,6 +1286,52 @@ function renderModalReservaAdmin() {
   lista.querySelectorAll("[data-reserva-id]").forEach(button => {
     button.addEventListener("click", () => rechazarReservaDesdeModal(parseInt(button.dataset.reservaId, 10)));
   });
+  lista.querySelectorAll("[data-color-reserva-id]").forEach(button => {
+    button.addEventListener("click", () => asignarColorSolicitud(
+      parseInt(button.dataset.colorReservaId, 10),
+      button.dataset.color || ""
+    ));
+  });
+}
+
+async function asignarColorSolicitud(id, etiquetaColor) {
+  if (!modoAdmin) return;
+  const status = document.getElementById("reservaAdminStatus");
+  status.textContent = "Guardando etiqueta...";
+
+  if (backendDisponible) {
+    try {
+      const res = await fetch(`${API}/reservas/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": token },
+        body: JSON.stringify({ etiquetaColor })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        status.textContent = data.error || "No se pudo guardar la etiqueta.";
+        return;
+      }
+    } catch {
+      status.textContent = "No se pudo conectar con el servidor.";
+      return;
+    }
+  }
+
+  const reservas = leerReservasLocal();
+  const reserva = reservas.find(item => item.id === id);
+  if (reserva) {
+    if (etiquetaColor) reserva.etiquetaColor = etiquetaColor;
+    else delete reserva.etiquetaColor;
+    guardarReservasLocal(reservas);
+  }
+  const pendiente = pendingAdminReservasHorario.find(item => item.id === id);
+  if (pendiente) {
+    if (etiquetaColor) pendiente.etiquetaColor = etiquetaColor;
+    else delete pendiente.etiquetaColor;
+  }
+  renderModalReservaAdmin();
+  document.getElementById("reservaAdminStatus").textContent = "Etiqueta actualizada.";
+  await renderSemana();
 }
 
 function cerrarReservaAdmin() {

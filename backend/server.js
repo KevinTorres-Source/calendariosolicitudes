@@ -38,6 +38,7 @@ const RESERVAS_FILE = path.join(__dirname, "reservas.json");
 const BLOQUEOS_FILE = path.join(__dirname, "bloqueos.json");
 const FEEDBACK_FILE = path.join(__dirname, "feedback.json");
 const LIMITES_SOLICITUDES_FILE = path.join(__dirname, "limites-solicitudes.json");
+const COLORES_ETIQUETA = new Set(["", "verde", "azul", "amarillo", "naranja", "morado", "rojo"]);
 const LIMITES_DISPOSITIVOS_FILE = path.join(__dirname, "limites-dispositivos.json");
 const ADMIN_CONFIG_FILE = path.join(__dirname, "admin-config.json");
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
@@ -83,6 +84,25 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "50kb" }));
 app.use(express.static(path.join(__dirname, "../frontend")));
 
+function marcarOrigenHistorico(reserva) {
+  if (!reserva || typeof reserva !== "object") return false;
+  // Las reservas anteriores no guardaban el origen de la sesión. Recuperamos
+  // únicamente los casos que se pueden identificar sin ambigüedad por el nombre.
+  if (!reserva.origenSolicitud) {
+    const usuarioAnterior = String(reserva.usuario || "").trim().toLowerCase();
+    const usuarioInterno = ["preescolar", "primaria", "secundaria"].find(nombre =>
+      usuarioAnterior === nombre || usuarioAnterior.startsWith(`${nombre} `)
+    );
+    if (usuarioInterno) {
+      reserva.origenSolicitud = "usuario-interno";
+      reserva.usuarioOrigen = usuarioInterno;
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function normalizarReserva(reserva) {
   if (!reserva || typeof reserva !== "object") return reserva;
 
@@ -99,6 +119,8 @@ function normalizarReserva(reserva) {
     reserva.objetivoUso = objetivo;
     reserva.nota = objetivo;
   }
+
+  marcarOrigenHistorico(reserva);
 
   return reserva;
 }
@@ -123,7 +145,13 @@ let adminConfig = {
 
 try {
   const data = fs.readFileSync(RESERVAS_FILE, "utf-8");
-  reservas = normalizarReservas(JSON.parse(data));
+  const reservasGuardadas = JSON.parse(data);
+  const huboMigracion = Array.isArray(reservasGuardadas) &&
+    reservasGuardadas.map(marcarOrigenHistorico).some(Boolean);
+  if (huboMigracion) {
+    fs.writeFileSync(RESERVAS_FILE, JSON.stringify(reservasGuardadas, null, 2));
+  }
+  reservas = normalizarReservas(reservasGuardadas);
 } catch {
   reservas = [];
 }
@@ -719,6 +747,10 @@ app.post("/reservas", async (req, res) => {
     return res.status(400).json({ error: validacion.error });
   }
 
+  const sesion = verificarTokenSesion(req);
+  const esUsuarioInterno = sesion?.rol === "coordinador" &&
+    ["preescolar", "primaria", "secundaria"].includes(String(sesion.usuario || "").trim().toLowerCase());
+
   const nuevaReserva = {
     id: Date.now(), // ID único basado en timestamp
     creadoEn: new Date().toISOString(),
@@ -737,7 +769,11 @@ app.post("/reservas", async (req, res) => {
     correo: String(correo || "").trim(),
     objetivoUso: objetivo,
     nota: objetivo,
-    estado: "aprobado"
+    estado: "aprobado",
+    ...(esUsuarioInterno ? {
+      origenSolicitud: "usuario-interno",
+      usuarioOrigen: String(sesion.usuario).trim().toLowerCase()
+    } : {})
   };
 
   reservas.push(nuevaReserva);
@@ -756,7 +792,9 @@ app.post("/reservas", async (req, res) => {
 // PUT cambiar estado de reserva (solo admin)
 app.put("/reservas/:id", requerirAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
-  const { estado } = req.body;
+  const { estado, etiquetaColor } = req.body;
+  const actualizaEstado = estado !== undefined;
+  const actualizaEtiqueta = etiquetaColor !== undefined;
 
   const reserva = reservas.find(r => r.id === id);
 
@@ -764,11 +802,20 @@ app.put("/reservas/:id", requerirAdmin, async (req, res) => {
     return res.status(404).json({ error: "Reserva no encontrada" });
   }
 
-  if (!["aprobado", "rechazado"].includes(estado)) {
+  if (!actualizaEstado && !actualizaEtiqueta) {
+    return res.status(400).json({ error: "No se enviaron cambios" });
+  }
+
+  if (actualizaEstado && !["aprobado", "rechazado"].includes(estado)) {
     return res.status(400).json({ error: "Estado inválido" });
   }
 
-  if (estado === "aprobado") {
+  const colorNormalizado = String(etiquetaColor || "").trim().toLowerCase();
+  if (actualizaEtiqueta && !COLORES_ETIQUETA.has(colorNormalizado)) {
+    return res.status(400).json({ error: "Color de etiqueta inválido" });
+  }
+
+  if (actualizaEstado && estado === "aprobado") {
     const capacidad = validarCapacidadHorario(reserva.fecha, reserva.hour, reserva.cantidad, reserva.id);
     if (capacidad.error) {
       return res.status(400).json({ error: capacidad.error });
@@ -776,11 +823,15 @@ app.put("/reservas/:id", requerirAdmin, async (req, res) => {
   }
 
   const estadoAnterior = reserva.estado;
-  reserva.estado = estado;
+  if (actualizaEstado) reserva.estado = estado;
+  if (actualizaEtiqueta) {
+    if (colorNormalizado) reserva.etiquetaColor = colorNormalizado;
+    else delete reserva.etiquetaColor;
+  }
   guardarReservas();
   let correoResultado = { enviado: false, razon: "No se intento enviar" };
 
-  if (estado === "rechazado" && estadoAnterior !== "rechazado") {
+  if (actualizaEstado && estado === "rechazado" && estadoAnterior !== "rechazado") {
     try {
       correoResultado = await enviarCorreoReserva(reserva);
     } catch (error) {
@@ -789,7 +840,7 @@ app.put("/reservas/:id", requerirAdmin, async (req, res) => {
     }
   }
 
-  res.json({ message: "Estado actualizado ✅", reserva, correo: correoResultado });
+  res.json({ message: "Solicitud actualizada ✅", reserva, correo: correoResultado });
 });
 
 // DELETE eliminar reserva (solo admin)

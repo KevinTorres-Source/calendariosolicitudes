@@ -827,6 +827,37 @@ body {
   min-width: 0;
 }
 
+.cell-reserva-item.solicitud-usuario-interno {
+  background: #dcfce7;
+  border: 1px solid #86d39b;
+  border-radius: 6px;
+  padding: 3px 5px;
+}
+
+.cell-reserva-item.solicitud-usuario-interno .cell-reserva-persona {
+  color: #166534;
+}
+
+.cell-reserva-item.solicitud-usuario-interno .cell-reserva-ipads,
+.cell-reserva-item.solicitud-usuario-interno .cell-reserva-admin-meta {
+  color: #397a4c;
+}
+
+.cell-reserva-item[class*="etiqueta-color-"] {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 5px;
+}
+.cell-reserva-item.etiqueta-color-verde { background: #dcfce7; border-color: #86d39b; }
+.cell-reserva-item.etiqueta-color-azul { background: #dbeafe; border-color: #8cb8ef; }
+.cell-reserva-item.etiqueta-color-amarillo { background: #fef9c3; border-color: #e8d96e; }
+.cell-reserva-item.etiqueta-color-naranja { background: #ffedd5; border-color: #f1b976; }
+.cell-reserva-item.etiqueta-color-morado { background: #f3e8ff; border-color: #c9a1ed; }
+.cell-reserva-item.etiqueta-color-rojo { background: #fee2e2; border-color: #eea0a0; }
+.cell-reserva-item[class*="etiqueta-color-"] .cell-reserva-persona { color: #27364a; }
+.cell-reserva-item[class*="etiqueta-color-"] .cell-reserva-ipads,
+.cell-reserva-item[class*="etiqueta-color-"] .cell-reserva-admin-meta { color: #526174; }
+
 .cell-reserva-ipads {
   color: #667085;
   font-size: 9px;
@@ -1145,6 +1176,34 @@ body {
 .reserva-admin-note {
   grid-column: 1 / -1;
 }
+
+.reserva-color-control {
+  padding-top: 2px;
+}
+
+.reserva-color-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reserva-color-option {
+  width: 28px;
+  height: 28px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #cbd5e1;
+  cursor: pointer;
+}
+.reserva-color-option:hover { transform: scale(1.08); }
+.reserva-color-option.selected { box-shadow: 0 0 0 3px #1c4169; }
+.reserva-color-option.color-ninguno { background: linear-gradient(135deg, #fff 44%, #d64545 45%, #d64545 55%, #fff 56%); }
+.reserva-color-option.color-verde { background: #86d39b; }
+.reserva-color-option.color-azul { background: #8cb8ef; }
+.reserva-color-option.color-amarillo { background: #e8d96e; }
+.reserva-color-option.color-naranja { background: #f1b976; }
+.reserva-color-option.color-morado { background: #c9a1ed; }
+.reserva-color-option.color-rojo { background: #eea0a0; }
 
 .btn-reserva-rechazar {
   flex: 0 0 auto;

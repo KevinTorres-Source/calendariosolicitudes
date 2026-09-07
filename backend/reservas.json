@@ -111,7 +111,9 @@
     "cantidad": 14,
     "correo": "prueba@colamericano.edu.co",
     "nota": "Prueba",
-    "estado": "aprobado"
+    "estado": "aprobado",
+    "origenSolicitud": "usuario-interno",
+    "usuarioOrigen": "primaria"
   },
   {
     "id": 1781100355670,
@@ -125,7 +127,9 @@
     "cantidad": 20,
     "correo": "prueba@colamericano.edu.co",
     "nota": "prueba secundaria",
-    "estado": "aprobado"
+    "estado": "aprobado",
+    "origenSolicitud": "usuario-interno",
+    "usuarioOrigen": "secundaria"
   },
   {
     "id": 1781100429630,
@@ -139,7 +143,9 @@
     "cantidad": 14,
     "correo": "ejemplo@colamericano.edu.co",
     "nota": "Preescolar ejemplo",
-    "estado": "aprobado"
+    "estado": "aprobado",
+    "origenSolicitud": "usuario-interno",
+    "usuarioOrigen": "preescolar"
   },
   {
     "id": 1781198366352,

@@ -18,7 +18,9 @@ let fechaActual = new Date();
 let token     = localStorage.getItem("token") || null;
 let rol       = localStorage.getItem("rol") || "profesor";
 let usuarioSesion = localStorage.getItem("usuarioSesion") || "";
-let modoAdmin = localStorage.getItem("modoAdmin") === "true";
+let modoAdmin = Boolean(token) && ["superadmin", "admin"].includes(rol);
+
+function esSuperAdmin() { return Boolean(token) && rol === "superadmin"; }
 
 let pendingFecha = null;
 let pendingHour  = null;
@@ -137,14 +139,7 @@ function esSolicitudUsuarioInterno(reserva) {
   return ["preescolar", "primaria", "secundaria"].some(item => nombre === item || nombre.startsWith(`${item} `));
 }
 
-const coloresEtiquetaSolicitud = [
-  { valor: "", nombre: "Sin etiqueta" },
-  { valor: "azul", nombre: "Azul" },
-  { valor: "amarillo", nombre: "Amarillo" },
-  { valor: "naranja", nombre: "Naranja" },
-  { valor: "morado", nombre: "Morado" },
-  { valor: "rojo", nombre: "Rojo" }
-];
+let etiquetasSolicitud = [];
 
 function normalizarReserva(reserva) {
   if (!reserva || typeof reserva !== "object") return reserva;
@@ -276,7 +271,7 @@ async function obtenerConfig() {
 async function obtenerReservas() {
   if (backendDisponible) {
     try {
-      const res = await fetch(`${API}/reservas`);
+      const res = await fetch(`${API}/reservas`, { headers: { Authorization: token || "" } });
       const data = await res.json();
       if (Array.isArray(data)) {
         const reservasNormalizadas = normalizarReservas(data);
@@ -416,6 +411,7 @@ async function validarReservaAPI(payload) {
 }
 
 async function bloquearAPI(fecha, hour) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   const bloqueos = leerBloqueosLocal();
   if (bloqueos.find(b => b.fecha === fecha && b.hour === hour))
     return { error: "Ese horario ya está bloqueado" };
@@ -512,6 +508,7 @@ async function obtenerSolicitudesRecientesAdmin(limite = 20) {
 }
 
 async function desbloquearAPI(bloqueoId) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   if (backendDisponible) {
     try {
       const res = await fetch(`${API}/bloqueos/${bloqueoId}`, {
@@ -528,6 +525,7 @@ async function desbloquearAPI(bloqueoId) {
 }
 
 async function guardarLimiteSolicitudesAPI(fecha, limite) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   const limites = leerLimitesSolicitudesLocal().filter(item => item.fecha !== fecha);
   const nuevo = { fecha, limite };
 
@@ -553,6 +551,7 @@ async function guardarLimiteSolicitudesAPI(fecha, limite) {
 }
 
 async function restablecerLimiteSolicitudesAPI(fecha) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   if (backendDisponible) {
     try {
       const res = await fetch(`${API}/limites-solicitudes/${fecha}`, {
@@ -573,6 +572,7 @@ async function restablecerLimiteSolicitudesAPI(fecha) {
 }
 
 async function guardarLimiteDispositivosAPI(fecha, limite) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   const limites = leerLimitesDispositivosLocal().filter(item => item.fecha !== fecha);
   const nuevo = { fecha, limite };
 
@@ -594,6 +594,7 @@ async function guardarLimiteDispositivosAPI(fecha, limite) {
 }
 
 async function restablecerLimiteDispositivosAPI(fecha) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   if (backendDisponible) {
     try {
       const res = await fetch(`${API}/limites-dispositivos/${fecha}`, {
@@ -639,6 +640,9 @@ function alternarMenuAdminMovil() {
 }
 
 function logout() {
+  document.getElementById("etiquetasModal").close();
+  cerrarReservaAdmin();
+  etiquetasSolicitud = [];
   token = null; rol = "profesor"; usuarioSesion = ""; modoAdmin = false;
   localStorage.removeItem("token");
   localStorage.removeItem("rol");
@@ -661,7 +665,17 @@ function actualizarBotonesAdmin() {
   document.getElementById("btnAdminMenu").hidden = !sesionActiva;
   if (!sesionActiva) cerrarMenuAdminMovil();
   sessionUserBadge.style.display = sesionActiva ? "block" : "none";
-  sessionUserBadge.textContent = (usuarioSesion || rol).toUpperCase();
+  const puedeGestionarEtiquetas = esSuperAdmin();
+  sessionUserBadge.disabled = !puedeGestionarEtiquetas;
+  if (puedeGestionarEtiquetas) {
+    sessionUserBadge.setAttribute("aria-haspopup", "dialog");
+    sessionUserBadge.setAttribute("aria-controls", "etiquetasModal");
+    sessionUserBadge.setAttribute("aria-label", "Super admin: administrar etiquetas");
+    sessionUserBadge.title = "Administrar etiquetas";
+  } else {
+    ["aria-haspopup", "aria-controls", "aria-label", "title"].forEach(attr => sessionUserBadge.removeAttribute(attr));
+  }
+  sessionUserBadge.textContent = esSuperAdmin() ? "SUPER ADMIN" : (usuarioSesion || rol).toUpperCase();
 }
 
 function actualizarIndicadorScrollSolicitud() {
@@ -950,6 +964,15 @@ function obtenerObjetivoUsoReserva(reserva) {
   return String(normalizarReserva(reserva)?.objetivoUso || "").trim();
 }
 
+function textoSobreColor(color) {
+  const canales = color.slice(1).match(/.{2}/g).map(hex => {
+    const valor = parseInt(hex, 16) / 255;
+    return valor <= 0.04045 ? valor / 12.92 : ((valor + 0.055) / 1.055) ** 2.4;
+  });
+  const luminancia = canales[0] * 0.2126 + canales[1] * 0.7152 + canales[2] * 0.0722;
+  return luminancia > 0.179 ? "#111827" : "#ffffff";
+}
+
 function renderReservasHorario(reservasHorario) {
   if (!reservasHorario.length) return "";
 
@@ -963,22 +986,15 @@ function renderReservasHorario(reservasHorario) {
       ? `<span class="cell-reserva-admin-meta">${escaparHTML([seccion, asignatura].filter(Boolean).join(" · "))}</span>`
       : "";
     const sesionActiva = modoAdmin || rol === "coordinador";
-    const colorEtiqueta = sesionActiva && coloresEtiquetaSolicitud.some(item => item.valor === reserva.etiquetaColor)
-      ? reserva.etiquetaColor
-      : "";
-    const claseColor = colorEtiqueta
-      ? ` etiqueta-color-${colorEtiqueta}`
-      : (sesionActiva && esSolicitudUsuarioInterno(reserva) ? " solicitud-usuario-interno" : "");
-    const tituloColor = colorEtiqueta
-      ? ` title="Solicitud etiquetada en color ${escaparHTML(colorEtiqueta)}"`
-      : (sesionActiva && esSolicitudUsuarioInterno(reserva)
-        ? ` title="Solicitud creada desde el usuario ${escaparHTML(reserva.usuarioOrigen || "interno")}"`
-        : "");
+    const etiqueta = sesionActiva ? reserva.etiqueta : null;
+    const color = etiqueta && /^#[0-9a-f]{6}$/i.test(etiqueta.color) ? etiqueta.color : "";
+    const claseColor = color ? " etiqueta-asignada" : (sesionActiva && esSolicitudUsuarioInterno(reserva) ? " solicitud-usuario-interno" : "");
+    const tituloColor = color ? ` style="--etiqueta-color:${color};--etiqueta-texto:${textoSobreColor(color)}" title="Responsable: ${escaparHTML(etiqueta.nombre)}"` : "";
     return `
       <span class="cell-reserva-item${claseColor}"${tituloColor}>
         <span class="cell-reserva-persona">${escaparHTML(reserva.usuario)}${reserva.curso ? ` - ${escaparHTML(reserva.curso)}` : ""}</span>
         ${detalleAdmin}
-        ${detalleIpads}
+        <span class="cell-reserva-pie">${detalleIpads}${color ? `<span class="etiqueta-nombre">${escaparHTML(etiqueta.nombre)}</span>` : ""}</span>
       </span>`;
   }).join("");
 }
@@ -1029,7 +1045,7 @@ async function renderSemana() {
 
     const h4 = document.createElement("h4");
     h4.className = "day-column-header";
-    if (modoAdmin && perteneceAlMesSeleccionado) h4.classList.add("admin-day-header");
+    if (esSuperAdmin() && perteneceAlMesSeleccionado) h4.classList.add("admin-day-header");
     const monthShort = fecha.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
     const title = document.createElement("span");
     title.textContent = perteneceAlMesSeleccionado
@@ -1037,7 +1053,7 @@ async function renderSemana() {
       : `${dayName} ${monthShort} ${fecha.getDate()}`;
     h4.appendChild(title);
 
-    if (modoAdmin && perteneceAlMesSeleccionado) {
+    if (esSuperAdmin() && perteneceAlMesSeleccionado) {
       const adminHeaderControls = document.createElement("div");
       adminHeaderControls.className = "day-admin-controls";
 
@@ -1150,7 +1166,7 @@ async function renderSemana() {
             <div class="cell-row cell-row-info">
               <div class="cell-reservas">${renderReservasHorario(reservasHorario)}</div>
             </div>` : ""}`;
-        if (modoAdmin) {
+        if (esSuperAdmin()) {
           cell.classList.add("desbloqueable");
           cell.addEventListener("click", () => {
             if (bloqueado.hour === null) desbloquearDia(bloqueado);
@@ -1188,7 +1204,7 @@ async function renderSemana() {
           </div>`;
         cell.addEventListener("click", () => {
           if (modoAdmin && solicitudesUsadas) mostrarOpcionesAdmin(reservasHorario, fechaStr, hour);
-          else if (modoAdmin) bloquearHorario(fechaStr, hour);
+          else if (esSuperAdmin()) bloquearHorario(fechaStr, hour);
           else abrirModal(fechaStr, hour);
         });
       }
@@ -1203,7 +1219,11 @@ async function renderSemana() {
 // =======================
 // ADMIN OPCIONES
 // =======================
-function mostrarOpcionesAdmin(reservaOLista, fecha, hour) {
+async function mostrarOpcionesAdmin(reservaOLista, fecha, hour) {
+  if (!modoAdmin) return;
+  if (esSuperAdmin()) {
+    try { await cargarEtiquetas(); } catch { etiquetasSolicitud = []; }
+  }
   const reservas = Array.isArray(reservaOLista)
     ? reservaOLista
     : leerReservasLocal().filter(r => r.id === reservaOLista);
@@ -1218,12 +1238,11 @@ function mostrarOpcionesAdmin(reservaOLista, fecha, hour) {
 
 function renderModalReservaAdmin() {
   const titulo = document.getElementById("reservaAdminTitulo");
-  const texto = document.getElementById("reservaAdminTexto");
   const lista = document.getElementById("reservaAdminLista");
   const status = document.getElementById("reservaAdminStatus");
 
+  document.getElementById("btnBloquearReservaAdmin").hidden = !esSuperAdmin();
   titulo.textContent = `${pendingAdminFecha} · ${pendingAdminHour}`;
-  texto.textContent = "Puedes asignar una etiqueta de color, rechazar una solicitud puntual o bloquear esta hora conservando las reservas.";
   status.textContent = "";
 
   lista.innerHTML = pendingAdminReservasHorario.map(reserva => {
@@ -1238,7 +1257,7 @@ function renderModalReservaAdmin() {
           <span class="reserva-admin-label">Nombre</span>
           <strong>${escaparHTML(reserva.usuario)}</strong>
         </div>
-        <button class="btn-reserva-rechazar" type="button" data-reserva-id="${reserva.id}">Rechazar</button>
+        ${esSuperAdmin() ? `<button class="btn-reserva-rechazar" type="button" data-reserva-id="${reserva.id}">Rechazar</button>` : ""}
       </div>
       <div class="reserva-admin-details">
         <div>
@@ -1269,16 +1288,22 @@ function renderModalReservaAdmin() {
           <span class="reserva-admin-label">Objetivo de uso</span>
           <p>${escaparHTML(objetivoUso || "Sin objetivo de uso")}</p>
         </div>
+        ${esSuperAdmin() ? `
         <div class="reserva-admin-note reserva-color-control">
-          <span class="reserva-admin-label">Asignar etiqueta de color</span>
-          <div class="reserva-color-options" role="group" aria-label="Color para la solicitud de ${escaparHTML(reserva.usuario)}">
-            ${coloresEtiquetaSolicitud.map(color => `
-              <button class="reserva-color-option color-${color.valor || "ninguno"}${(reserva.etiquetaColor || "") === color.valor ? " selected" : ""}"
-                type="button" data-color-reserva-id="${reserva.id}" data-color="${color.valor}"
-                title="${color.nombre}" aria-label="${color.nombre}" aria-pressed="${(reserva.etiquetaColor || "") === color.valor}"></button>
-            `).join("")}
+          <span class="reserva-admin-label" id="etiqueta-${reserva.id}">Responsable</span>
+          <div class="asignacion-etiquetas" role="group" aria-labelledby="etiqueta-${reserva.id}">
+            ${[{ id: "", nombre: "Sin etiqueta", color: "#94a3b8" }, ...etiquetasSolicitud].map(item => `
+              <button class="asignacion-etiqueta" type="button" data-etiqueta-reserva-id="${reserva.id}"
+                data-etiqueta-id="${escaparHTML(item.id)}" aria-pressed="${(reserva.etiquetaId || "") === item.id}"
+                style="--opcion-color:${/^#[0-9a-f]{6}$/i.test(item.color) ? item.color : "#94a3b8"}">
+                <span class="asignacion-punto" aria-hidden="true"></span>
+                <span>${escaparHTML(item.nombre)}</span>
+                <span class="asignacion-check" aria-hidden="true">✓</span>
+              </button>`).join("")}
           </div>
-        </div>
+          ${!etiquetasSolicitud.length ? `<p>${esSuperAdmin() ? 'Crea etiquetas haciendo clic en SUPER ADMIN.' : 'No hay etiquetas disponibles.'}</p>` : ""}
+
+        </div>` : (reserva.etiqueta ? `<div class="reserva-admin-note"><span class="etiqueta-solo-lectura" style="--etiqueta-color:${/^#[0-9a-f]{6}$/i.test(reserva.etiqueta.color) ? reserva.etiqueta.color : "#526fa3"}" title="Etiqueta asignada">${escaparHTML(reserva.etiqueta.nombre)}</span></div>` : "")}
       </div>
     </article>
   `;
@@ -1287,55 +1312,100 @@ function renderModalReservaAdmin() {
   lista.querySelectorAll("[data-reserva-id]").forEach(button => {
     button.addEventListener("click", () => rechazarReservaDesdeModal(parseInt(button.dataset.reservaId, 10)));
   });
-  lista.querySelectorAll("[data-color-reserva-id]").forEach(button => {
-    button.addEventListener("click", () => asignarColorSolicitud(
-      parseInt(button.dataset.colorReservaId, 10),
-      button.dataset.color || ""
-    ));
+  lista.querySelectorAll("[data-etiqueta-reserva-id]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (button.getAttribute("aria-pressed") === "true") return;
+      asignarEtiquetaSolicitud(Number(button.dataset.etiquetaReservaId), button.dataset.etiquetaId || null);
+    });
   });
 }
 
-async function asignarColorSolicitud(id, etiquetaColor) {
-  if (!modoAdmin) return;
+async function leerRespuestaEtiquetas(res) {
+  if (!(res.headers.get("content-type") || "").includes("application/json")) {
+    throw new Error(res.status === 404
+      ? "El servidor no tiene habilitadas las etiquetas. Reinicia el backend actualizado y recarga la página."
+      : "El servidor devolvió una respuesta inesperada. Comprueba que el backend esté disponible.");
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "No se pudo completar la operación de etiquetas.");
+  return data;
+}
+
+async function cargarEtiquetas() {
+  const res = await fetch(`${API}/etiquetas`, { headers: { Authorization: token || "" } });
+  etiquetasSolicitud = await leerRespuestaEtiquetas(res);
+}
+
+async function asignarEtiquetaSolicitud(id, etiquetaId) {
+  if (!esSuperAdmin()) return;
   const status = document.getElementById("reservaAdminStatus");
   status.textContent = "Guardando etiqueta...";
-
-  if (backendDisponible) {
-    try {
-      const res = await fetch(`${API}/reservas/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "Authorization": token },
-        // Se incluye el estado actual para mantener compatibilidad con
-        // instalaciones cuyo backend todavía valida este campo en PUT.
-        body: JSON.stringify({ etiquetaColor, estado: pendingAdminReservasHorario.find(item => item.id === id)?.estado || "aprobado" })
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        status.textContent = data.error || "No se pudo guardar la etiqueta.";
-        return;
-      }
-    } catch {
-      status.textContent = "No se pudo conectar con el servidor.";
-      return;
-    }
+  document.querySelectorAll("#reservaAdminLista [data-etiqueta-reserva-id]").forEach(button => button.disabled = true);
+  try {
+    const res = await fetch(`${API}/reservas/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json", Authorization: token },
+      body: JSON.stringify({ etiquetaId })
+    });
+    await leerRespuestaEtiquetas(res);
+    await renderSemana();
+    pendingAdminReservasHorario = leerReservasLocal().filter(item => item.fecha === pendingAdminFecha && item.hour === pendingAdminHour && item.estado !== "rechazado");
+    renderModalReservaAdmin();
+    status.textContent = "";
+  } catch (error) {
+    renderModalReservaAdmin();
+    status.textContent = error.message;
   }
-
-  const reservas = leerReservasLocal();
-  const reserva = reservas.find(item => item.id === id);
-  if (reserva) {
-    if (etiquetaColor) reserva.etiquetaColor = etiquetaColor;
-    else delete reserva.etiquetaColor;
-    guardarReservasLocal(reservas);
-  }
-  const pendiente = pendingAdminReservasHorario.find(item => item.id === id);
-  if (pendiente) {
-    if (etiquetaColor) pendiente.etiquetaColor = etiquetaColor;
-    else delete pendiente.etiquetaColor;
-  }
-  renderModalReservaAdmin();
-  document.getElementById("reservaAdminStatus").textContent = "Etiqueta actualizada.";
-  await renderSemana();
 }
+
+function renderEtiquetas() {
+  const lista = document.getElementById("etiquetasLista");
+  lista.replaceChildren();
+  if (!etiquetasSolicitud.length) lista.textContent = "Aún no hay etiquetas. Agrega la primera.";
+  etiquetasSolicitud.forEach(item => {
+    const fila = document.createElement("div");
+    fila.className = "etiqueta-fila reserva-admin-item";
+    const nombre = document.createElement("span");
+    nombre.textContent = item.nombre;
+    nombre.style.borderLeft = `8px solid ${item.color}`;
+    const editar = document.createElement("button");
+    editar.className = "btn-cancelar etiqueta-editar";
+    editar.type = "button"; editar.textContent = "Editar";
+    editar.onclick = () => {
+      document.getElementById("etiquetaId").value = item.id;
+      document.getElementById("etiquetaNombre").value = item.nombre;
+      document.getElementById("etiquetaColor").value = item.color;
+      actualizarPaletaEtiquetas();
+      document.getElementById("etiquetaNombre").focus();
+    };
+    const eliminar = document.createElement("button");
+    eliminar.className = "btn-reserva-rechazar";
+    eliminar.type = "button"; eliminar.textContent = "Eliminar";
+    eliminar.onclick = () => {
+      if (confirm(`¿Eliminar la etiqueta “${item.nombre}”? Sus solicitudes quedarán sin etiqueta.`)) modificarEtiqueta("DELETE", item.id);
+    };
+    fila.append(nombre, editar, eliminar); lista.append(fila);
+  });
+}
+
+async function modificarEtiqueta(method, id, valores) {
+  if (!esSuperAdmin()) return;
+  const status = document.getElementById("etiquetasStatus");
+  const form = document.getElementById("etiquetasForm");
+  const controles = document.querySelectorAll("#etiquetasModal button, #etiquetasModal input");
+  controles.forEach(control => control.disabled = true);
+  try {
+    const res = await fetch(`${API}/etiquetas${id ? `/${id}` : ""}`, {
+      method, headers: { "Content-Type": "application/json", Authorization: token },
+      ...(valores ? { body: JSON.stringify(valores) } : {})
+    });
+    await leerRespuestaEtiquetas(res);
+    form.reset();
+    await cargarEtiquetas(); renderEtiquetas(); await renderSemana();
+    status.textContent = method === "DELETE" ? "Etiqueta eliminada." : "Etiqueta guardada.";
+  } catch (error) { status.textContent = error.message; }
+  finally { controles.forEach(control => control.disabled = false); }
+}
+
 
 function cerrarReservaAdmin() {
   document.getElementById("reservaAdminOverlay").style.display = "none";
@@ -1345,6 +1415,7 @@ function cerrarReservaAdmin() {
 }
 
 async function rechazarReservaDesdeModal(id) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   const status = document.getElementById("reservaAdminStatus");
   status.textContent = "Rechazando solicitud...";
   await cambiarEstado(id, "rechazado");
@@ -1352,6 +1423,7 @@ async function rechazarReservaDesdeModal(id) {
 }
 
 async function bloquearReservaDesdeModal() {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   const status = document.getElementById("reservaAdminStatus");
   if (!pendingAdminFecha || !pendingAdminHour) return;
 
@@ -1367,6 +1439,7 @@ async function bloquearReservaDesdeModal() {
 }
 
 async function cambiarEstado(id, estado) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   if (backendDisponible) {
     try {
       await fetch(`${API}/reservas/${id}`, {
@@ -1383,6 +1456,7 @@ async function cambiarEstado(id, estado) {
 }
 
 async function eliminarReserva(id) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   if (backendDisponible) {
     try {
       await fetch(`${API}/reservas/${id}`, { method: "DELETE", headers: { "Authorization": token } });
@@ -1413,6 +1487,7 @@ async function aceptarConfirmacionAdmin() {
 }
 
 async function bloquearHorario(fecha, hour) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   abrirConfirmacionAdmin({
     titulo: "Block time slot",
     texto: `This will block ${hour} on ${fecha}.`,
@@ -1434,6 +1509,7 @@ async function bloquearHorario(fecha, hour) {
 }
 
 async function bloquearDia(fecha) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   abrirConfirmacionAdmin({
     titulo: "Block entire day",
     texto: `This will block every time slot on ${fecha}.`,
@@ -1455,6 +1531,7 @@ async function bloquearDia(fecha) {
 }
 
 async function desbloquearHorario(bloqueo) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   abrirConfirmacionAdmin({
     titulo: "Unblock time slot",
     texto: `This will unlock ${bloqueo.hour} on ${bloqueo.fecha}.`,
@@ -1476,6 +1553,7 @@ async function desbloquearHorario(bloqueo) {
 }
 
 async function desbloquearDia(bloqueo) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   abrirConfirmacionAdmin({
     titulo: "Unblock entire day",
     texto: `This will unlock every time slot on ${bloqueo.fecha}.`,
@@ -1497,6 +1575,7 @@ async function desbloquearDia(bloqueo) {
 }
 
 async function cambiarLimiteSolicitudesDia(fecha) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   abrirModalLimiteDia({
     tipo: "solicitudes",
     fecha,
@@ -1508,6 +1587,7 @@ async function cambiarLimiteSolicitudesDia(fecha) {
 }
 
 async function cambiarLimiteDispositivosDia(fecha) {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   abrirModalLimiteDia({
     tipo: "dispositivos",
     fecha,
@@ -1541,6 +1621,7 @@ function ajustarInputLimite(delta) {
 }
 
 async function guardarLimiteDiaDesdeModal() {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   const limite = parseInt(document.getElementById("inputLimiteDia").value, 10);
   const status = document.getElementById("limiteSolicitudesStatus");
 
@@ -1564,6 +1645,7 @@ async function guardarLimiteDiaDesdeModal() {
 }
 
 async function restablecerLimiteDiaDesdeModal() {
+  if (!esSuperAdmin()) return { error: "Esta acción requiere SUPER ADMIN." };
   const status = document.getElementById("limiteSolicitudesStatus");
   if (!pendingLimiteContexto) return;
 
@@ -2269,7 +2351,7 @@ function graficaBarrasExcel(titulo, datos, color = "#1C4169") {
   const base = 220;
   const max = Math.max(...datos.map(item => item.value), 1);
   const barras = datos.map((item, index) => {
-    const barHeight = Math.max(4, (item.value / max) * 160);
+    const barHeight = Math.max(0, (item.value / max) * 160);
     const x = 42 + index * 74;
     const y = base - barHeight;
     return `
@@ -2498,52 +2580,167 @@ async function exportarAnalyticsExcel() {
   status.textContent = "Excel report generated successfully.";
 }
 
-async function exportarAnalyticsPdf() {
+function docentesInformePdf(solicitudes) {
+  const docentes = new Map();
+  solicitudes.forEach(item => {
+    const nombre = String(item.usuario || "").trim();
+    const clave = String(item.correo || nombre || "sin-nombre").trim().toLocaleLowerCase();
+    const docente = docentes.get(clave) || { nombre: "Nombre no registrado", total: 0 };
+    if (nombre && !nombre.includes("@")) docente.nombre = nombre;
+    docente.total += 1;
+    docentes.set(clave, docente);
+  });
+  return [...docentes.values()].sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre, "es"));
+}
+
+function evolucionInformePdf(solicitudes) {
+  const datos = crearDatosSolicitudesMensuales(solicitudes);
+  if (!datos.length) return [];
+  const [year, month] = datos.at(-1).key.split("-").map(Number);
+  const fin = new Date(year, month - 1, 1);
+  const inicio = new Date(year, month - 12, 1);
+  const mapa = new Map(datos.map(item => [item.key, item.value]));
+  const resultado = [];
+  for (const fecha = new Date(inicio); fecha <= fin; fecha.setMonth(fecha.getMonth() + 1)) {
+    const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`;
+    if (key < datos[0].key) continue;
+    resultado.push({ key, label: fecha.toLocaleDateString("es-CO", { month: "short", year: "2-digit" }), value: mapa.get(key) || 0 });
+  }
+  return resultado;
+}
+
+function demandaHorariaInformePdf(solicitudes) {
+  const franjas = new Map();
+  let sinHorario = 0;
+  let sinCantidad = 0;
+  solicitudes.forEach(item => {
+    const horario = String(item.hour || "").trim();
+    if (!/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(horario)) { sinHorario += 1; return; }
+    const franja = franjas.get(horario) || { horario, solicitudes: 0, ipads: 0 };
+    franja.solicitudes += 1;
+    const cantidad = Number(item.cantidad);
+    if (Number.isSafeInteger(cantidad) && cantidad > 0) franja.ipads += cantidad;
+    else sinCantidad += 1;
+    franjas.set(horario, franja);
+  });
+  const filas = [...franjas.values()].sort((a, b) => b.solicitudes - a.solicitudes || a.horario.localeCompare(b.horario));
+  return { filas, sinHorario, sinCantidad };
+}
+
+function graficaComparativaPdf(titulo, datos, color, total = null) {
+  const maximo = Math.max(...datos.map(item => item.value), 1);
+  const filas = datos.map(item => {
+    const porcentaje = total > 0 ? ` · ${(item.value / total * 100).toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : "";
+    return `<div class="comparativa-fila"><div class="comparativa-dato"><span>${excelValor(item.label)}</span><strong>${excelValor(item.value)}${porcentaje}</strong></div><div class="comparativa-pista"><span style="width:${item.value / maximo * 100}%;background:${color}"></span></div></div>`;
+  }).join("");
+  return `<h2>${excelValor(titulo)}</h2>${filas || '<p>Sin datos disponibles</p>'}`;
+}
+
+function prioridadesDemandaPdf(horarios, asignaturas, secciones) {
+  const prioridades = [];
+  const mayorVolumen = [...horarios.filas].sort((a, b) => b.ipads - a.ipads || b.solicitudes - a.solicitudes)[0];
+  if (mayorVolumen?.ipads > 0) prioridades.push(`Revisar disponibilidad en ${mayorVolumen.horario}: acumula ${mayorVolumen.ipads} iPads solicitados. Verificar coincidencias por fecha antes de ajustar capacidad.`);
+  else if (horarios.filas.length) prioridades.push(`Revisar la franja ${horarios.filas[0].horario}, con ${horarios.filas[0].solicitudes} solicitudes; completar cantidades para evaluar capacidad.`);
+  if (asignaturas.length) prioridades.push(`Coordinar recursos para ${asignaturas[0].label}, con ${asignaturas[0].value} solicitudes en el periodo.`);
+  if (secciones.length > 1) {
+    const ordenadas = [...secciones].sort((a, b) => a.value - b.value);
+    if (ordenadas[0].value < ordenadas.at(-1).value) prioridades.push(`Explorar necesidades pedagógicas y participación docente en ${ordenadas[0].label} antes de proponer acciones para aumentar el uso.`);
+  }
+  if (!prioridades.length) prioridades.push("Reunir registros suficientes para identificar concentraciones de demanda.");
+  return prioridades;
+}
+
+async function exportarAnalyticsPdf(anexoTecnico = false) {
   if (!modoAdmin) return;
   const status = document.getElementById("adminStatus");
   const ventana = window.open("", "_blank");
   if (!ventana) {
-    status.textContent = "The browser blocked the report window. Enable pop-ups and try again.";
+    status.textContent = "Permite las ventanas emergentes para abrir el informe.";
     return;
   }
-  ventana.document.write("<p style='font-family:Arial;padding:24px'>Preparing executive report...</p>");
-  status.textContent = "Preparing executive PDF report...";
-
+  ventana.document.write("<p style='font-family:Arial;padding:24px'>Preparando informe...</p>");
+  status.textContent = "Preparando informe PDF...";
+  try {
   const [feedbackData, reservasData] = await Promise.all([obtenerFeedbackAdmin(), obtenerReservas()]);
-  if (feedbackData.error) {
-    ventana.close();
-    status.textContent = feedbackData.error;
-    return;
-  }
-
-  const feedback = Array.isArray(feedbackData) ? feedbackData : [];
+  if (feedbackData.error) throw new Error(feedbackData.error);
   const solicitudes = Array.isArray(reservasData) ? reservasData : [];
-  const metricas = calcularMetricasFeedback(feedback);
+  const feedbackHistorico = Array.isArray(feedbackData) ? feedbackData : [];
   const informes = crearInformeMensualSolicitudes(solicitudes);
   const informe = informes.find(item => item.key === requestsAnalyticsMonth) || informes.at(-1);
   const periodo = informe?.label || "Sin datos";
+  const solicitudesPeriodo = solicitudes.filter(item => informe && obtenerMesCreacionSolicitud(item)?.key === informe.key);
+  const feedback = feedbackHistorico.filter(item => {
+    const fecha = new Date(item.creadoEn || "");
+    if (!Number.isFinite(fecha.getTime()) || !informe) return false;
+    return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}` === informe.key;
+  });
+  const metricas = calcularMetricasFeedback(feedback);
+  const excelencia = metricas.tendencia.length >= 2 && metricas.tendencia.every(item => item.promedio === 5);
   const porSeccion = crearDatosPieDesdeMapa(informe?.secciones || new Map());
   const porAsignatura = crearDatosPieDesdeMapa(informe?.asignaturas || new Map());
   const porCurso = crearDatosPieDesdeMapa(informe?.cursos || new Map());
-  const porProfesor = crearDatosPieDesdeMapa(informe?.profesores || new Map());
-  const porMes = crearDatosSolicitudesMensuales(solicitudes);
-  const distribucion = feedbackRatingValues.map(valor => ({ label: `${formatearRating(valor)} estrellas`, value: metricas.conteosGenerales[valor] || 0 }));
-  const coloresPdf = ["#1C4169", "#F08C28", "#475467", "#667085", "#D9E2EC"];
-  const filasSolicitudes = solicitudes.map(item => [item.creadoEn || "", item.fecha || "", item.hour || "", item.usuario || "", item.curso || "", item.aplicacion || "", obtenerSeccionReserva(item), obtenerAsignaturaReserva(item), item.cantidad || "", item.correo || "", obtenerObjetivoUsoReserva(item), traducirEstadoReporte(item.estado)]);
-  const filasFeedback = feedback.map(item => {
-    const valores = feedbackPreguntas.map(pregunta => normalizarFeedbackValor(item[pregunta.key])).filter(valor => valor !== null);
-    const promedio = valores.length ? (valores.reduce((suma, valor) => suma + valor, 0) / valores.length).toFixed(1) : "";
-    return [item.creadoEn || "", item.correo || "", item.eficienciaPrestamo || "", item.colaboradores || "", item.configuracionIpads || "", promedio, item.comentario || ""];
-  });
+  const horarios = demandaHorariaInformePdf(solicitudesPeriodo);
+  const docentes = docentesInformePdf(solicitudesPeriodo);
+  const porMes = evolucionInformePdf(solicitudes);
+  const distribucion = feedbackRatingValues.map(valor => ({ label: `${formatearRating(valor)} estrellas`, value: metricas.conteosGenerales[valor] || 0 })).filter(item => item.value);
+  const coloresPdf = ["#1C4169", "#F08C28", "#52779D", "#F6B675", "#B5C7D9"];
   const tarjeta = (etiqueta, valor, nota = "") => `<article class="kpi"><span>${excelValor(etiqueta)}</span><strong>${excelValor(valor)}</strong><small>${excelValor(nota)}</small></article>`;
+  const lista = items => `<ul>${items.map(item => `<li>${excelValor(item)}</li>`).join("")}</ul>`;
+  const capitulo = (numero, titulo) => `<div class="capitulo requests"><span class="capitulo-numero">${numero}</span><div><h1>${titulo}</h1><p>Periodo: ${excelValor(periodo)}</p></div></div>`;
   const fechaReporte = new Date().toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" });
-  const logoColegio = new URL("images/Logo1.jpeg", window.location.href).href;
-  const html = `<!doctype html><html lang="es"><head><meta charset="UTF-8"><title>Reporte ejecutivo de analítica</title><style>
+  const logoColegio = new URL("Images/Mini_logo.png", window.location.href).href;
+  const titulo = anexoTecnico ? "Anexo técnico de analítica" : "Reporte ejecutivo de analítica";
+  const portada = `<section class="portada"><img class="portada-logo" src="${excelValor(logoColegio)}" alt="Logo completo del Colegio Americano de Bogotá Bilingüe"><div><div class="marca">Colegio Americano de Bogotá Bilingüe</div><h1>${titulo}</h1><p class="subtitulo">${anexoTecnico ? "Registros individuales para consulta y trazabilidad." : "Demanda del servicio y satisfacción de sus usuarios."}</p><div class="ejes-portada"><span class="eje-chip">${anexoTecnico ? "Histórico completo" : excelValor(periodo)}</span></div><p class="fecha">Generado: ${excelValor(fechaReporte)}</p></div></section>`;
+  let cuerpo;
+  if (anexoTecnico) {
+    const filasSolicitudes = solicitudes.map(item => [item.creadoEn || "", item.fecha || "", item.hour || "", item.usuario || "", item.curso || "", item.aplicacion || "", obtenerSeccionReserva(item), obtenerAsignaturaReserva(item), item.cantidad || "", item.correo || "", obtenerObjetivoUsoReserva(item), traducirEstadoReporte(item.estado)]);
+    const filasFeedback = feedbackHistorico.map(item => {
+      const valores = feedbackPreguntas.map(pregunta => normalizarFeedbackValor(item[pregunta.key])).filter(valor => valor !== null);
+      return [item.creadoEn || "", item.correo || "", item.eficienciaPrestamo || "", item.colaboradores || "", item.configuracionIpads || "", valores.length ? (valores.reduce((suma, valor) => suma + valor, 0) / valores.length).toFixed(1) : "", item.comentario || ""];
+    });
+    cuerpo = `<section class="pagina detalle"><h1>Anexo técnico · Solicitudes</h1><p class="meta">Histórico completo · ${solicitudes.length} registros</p>${tablaExcel("Registro individual", ["Creación", "Fecha solicitada", "Hora", "Nombre", "Curso/lugar", "Aplicación", "Sección", "Asignatura", "iPads", "Correo", "Objetivo", "Estado"], filasSolicitudes)}</section><section class="pagina detalle"><h1>Anexo técnico · Retroalimentación</h1><p class="meta">Histórico completo · ${feedbackHistorico.length} respuestas</p>${tablaExcel("Registro individual", ["Creación", "Correo", "Eficiencia", "Colaboradores", "Configuración", "Promedio", "Comentario"], filasFeedback)}</section>`;
+  } else {
+    const ultimo = porMes.at(-1);
+    const anterior = porMes.at(-2);
+    const variacion = anterior?.value ? `${(((ultimo.value - anterior.value) / anterior.value) * 100).toFixed(1)}% frente al mes anterior` : "Sin base comparable en el mes anterior";
+    cuerpo = `
+      <section class="pagina">${capitulo("01", "Demanda")}
+        <div class="kpis">${tarjeta("Solicitudes históricas", solicitudes.length)}${tarjeta("Solicitudes del periodo", informe?.total || 0, periodo)}${tarjeta("Docentes / usuarios", docentes.length, periodo)}${tarjeta("Sección principal", obtenerTopCategoria(porSeccion))}</div>
+        <div class="definicion"><article><strong>Hallazgos del periodo</strong>${lista([`${informe?.total || 0} solicitudes registradas.`, porSeccion.length ? `${porSeccion[0].label}: ${porSeccion[0].value} solicitudes.` : "Sin distribución por sección.", porAsignatura.length ? `Mayor demanda por asignatura: ${porAsignatura[0].label}.` : "Sin datos de asignaturas."])}</article><article><strong>Prioridades de gestión</strong>${lista(prioridadesDemandaPdf(horarios, porAsignatura, porSeccion))}</article></div>
+        <p class="nota">Solicitudes agrupadas por fecha de creación. El volumen de uso no mide satisfacción.</p>
+      </section>
+      <section class="pagina">${capitulo("02", "Evolución de la demanda")}
+        <div class="panel">${graficaBarrasExcel("Evolución mensual · Hasta 12 meses", porMes, "#1C4169")}</div>
+        ${lista(ultimo ? [`Último mes registrado (${ultimo.label}): ${ultimo.value} solicitudes.`, variacion] : ["No hay solicitudes registradas."])}
+        <p class="nota">Los meses intermedios sin registros se muestran en cero. El mes en curso puede estar incompleto; la variación es descriptiva, no una proyección.</p>
+      </section>
+      <section class="pagina">${capitulo("03", "Distribución y participación docente")}
+        <div class="grid"><div class="panel">${graficaComparativaPdf("Participación por sección", porSeccion, "#1C4169", informe?.total || 0)}<p class="meta">Cantidad y porcentaje del total de solicitudes del periodo. Porcentajes redondeados a un decimal.</p>${graficaBarrasHorizontalesExcel("Asignaturas · 5 principales", porAsignatura.slice(0, 5), "#F08C28")}${graficaBarrasHorizontalesExcel("Cursos o lugares · 5 principales", porCurso.slice(0, 5), "#52779D")}</div>
+        <div class="panel docentes">${tablaExcel("Docentes / usuarios · 12 principales", ["Nombre", "Solicitudes"], docentes.slice(0, 12).map(item => [item.nombre, item.total]))}<p class="meta">Ordenados por total de solicitudes del periodo. El detalle completo está en el Anexo técnico.</p></div></div>
+      </section>
+      <section class="pagina">${capitulo("04", "Demanda por franja horaria")}
+        <div class="grid"><div class="panel">${graficaComparativaPdf("Solicitudes por horario", horarios.filas.map(item => ({ label: item.horario, value: item.solicitudes })), "#1C4169")}</div><div class="panel">${graficaComparativaPdf("iPads solicitados por horario · Acumulado", horarios.filas.map(item => ({ label: item.horario, value: item.ipads })), "#F08C28")}</div></div>
+        <p class="nota">Solicitudes creadas en el periodo, incluidas las rechazadas. Se usa la franja solicitada y se suman los iPads a lo largo de las fechas; el acumulado no representa equipos únicos ni necesidad simultánea. Ambas gráficas mantienen el mismo orden, por frecuencia de solicitudes.</p>
+        ${horarios.sinHorario || horarios.sinCantidad ? `<p class="meta">${horarios.sinHorario} solicitudes sin horario válido excluidas de ambas gráficas; ${horarios.sinCantidad} solicitudes con horario pero sin cantidad válida incluidas solo en el conteo de solicitudes.</p>` : ""}
+        <p class="meta">Registros detallados disponibles en el PDF independiente «Anexo técnico».</p>
+      </section>
+      <section class="pagina">${capitulo("05", "Satisfacción")}
+        <div class="kpis">${tarjeta("Respuestas del periodo", feedback.length)}${tarjeta("Promedio general", metricas.totalCalificaciones ? `${metricas.promedioGeneral.toFixed(1)} / 5` : "Sin datos")}${tarjeta("Calificaciones de 4 o más", metricas.totalCalificaciones ? `${metricas.favorables}%` : "Sin datos")}${tarjeta("Calificaciones válidas", metricas.totalCalificaciones)}</div>
+        <div class="definicion"><article><strong>Lectura de resultados</strong>${lista(["Evalúa préstamo, atención y condición de los iPads.", `Base: ${feedback.length} respuestas del periodo seleccionado.`, "Las respuestas son voluntarias; no representan a todos los usuarios."])}</article><article><strong>Acciones sugeridas</strong>${lista(metricas.totalCalificaciones ? [excelencia ? "Mantener las prácticas que sostienen las valoraciones máximas." : `Revisar la dimensión con menor promedio: ${metricas.debilidad}.`, "Contrastar los resultados con comentarios del Anexo técnico.", "Promover participación para ampliar la base de respuestas."] : ["Recopilar respuestas antes de establecer conclusiones.", "Invitar a los usuarios a evaluar el servicio."])}</article></div>
+        ${tablaExcel("Resultados por dimensión", ["Dimensión", "Respuestas", "Promedio / 5"], metricas.metricas.map(item => [item.label, item.total, item.total ? item.promedio.toFixed(1) : "Sin datos"]))}
+      </section>
+      <section class="pagina">${capitulo("06", "Satisfacción · Tendencia y consistencia")}
+        ${excelencia ? '<p class="destacado">Consistencia absoluta en la excelencia del servicio durante el periodo</p>' : ""}
+        <div class="grid"><div class="panel">${graficaLineaFeedbackExcel(metricas.tendencia)}<p class="meta">Promedio por respuesta, en orden de recepción. Escala de 1 a 5.</p></div><div class="panel">${graficaPieExcel("Distribución de calificaciones", distribucion, metricas.totalCalificaciones, coloresPdf)}</div></div>
+        <p class="nota">${excelencia ? `La afirmación se limita a las ${metricas.tendencia.length} respuestas con calificaciones válidas del periodo.` : metricas.tendencia.length === 1 ? "Una sola respuesta no permite establecer una tendencia." : "Interpretar los resultados junto con el tamaño de la muestra y la participación."}</p>
+      </section>`;
+  }
+  const html = `<!doctype html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}</title><style>
     @page { size: A4 landscape; margin: 13mm; }
     * { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; } body { margin:0; color:#243044; font-family:Arial,sans-serif; font-size:10px; }
     .portada { min-height:175mm; position:relative; display:grid; grid-template-columns:190px 1fr; align-items:center; gap:35px; padding:22mm; overflow:hidden; background:#FFFFFF; border-top:12px solid #1C4169; border-bottom:12px solid #F08C28; break-after:page; }
     .portada::after { content:""; position:absolute; right:-85px; top:-85px; width:240px; height:240px; border-radius:50%; background:#1C4169; opacity:.05; }
-    .portada-logo { width:175px; height:175px; object-fit:contain; padding:9px; border-radius:50%; background:#fff; box-shadow:0 12px 35px rgba(28,65,105,.18); }
+    .portada-logo { width:190px; height:auto; max-height:220px; object-fit:contain; display:block; }
     .portada .marca { color:#F08C28; font-size:12px; font-weight:700; letter-spacing:1.7px; text-transform:uppercase; } .portada h1 { max-width:700px; margin:16px 0 10px; color:#1C4169; font-size:36px; line-height:1.08; } .portada .subtitulo { margin:0 0 24px; color:#475467; font-size:16px; line-height:1.45; } .portada .fecha { color:#667085; font-size:11px; }
     .ejes-portada { display:flex; gap:9px; margin:20px 0; } .eje-chip { padding:8px 12px; border:1px solid #D9E2EC; border-radius:20px; color:#1C4169; background:#F5F7FB; font-weight:700; } .eje-chip.requests { border-left:4px solid #F08C28; } .eje-chip.feedback { border-left:4px solid #1C4169; }
     .pagina { break-before:page; } h1,h2,h3 { color:#1C4169; } h1 { font-size:25px; margin:0 0 5px; } h2 { margin:0 0 12px; font-size:17px; border-bottom:3px solid #F08C28; padding-bottom:6px; } h3 { font-size:12px; margin:0 0 7px; }
@@ -2551,22 +2748,31 @@ async function exportarAnalyticsPdf() {
     .capitulo { display:flex; align-items:center; gap:14px; margin-bottom:14px; padding:14px 16px; border-radius:7px; color:#fff; background:#1C4169; } .capitulo.requests { border-left:7px solid #F08C28; } .capitulo.feedback { border-left:7px solid #D9E2EC; } .capitulo-numero { font-size:31px; font-weight:800; opacity:.72; } .capitulo h1 { margin:0; color:#fff; font-size:22px; } .capitulo p { margin:3px 0 0; opacity:.9; }
     .definicion { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:0 0 16px; } .definicion article { padding:13px; border:1px solid #D8E1EE; border-radius:9px; } .definicion strong { display:block; margin-bottom:5px; color:#1C4169; font-size:12px; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; } .panel { break-inside:avoid; padding:12px; border:1px solid #D8E1EE; border-radius:9px; background:#fff; } .panel svg { max-width:100%; height:auto; }
-    table { width:100%; border-collapse:collapse; margin:7px 0 14px; table-layout:fixed; } thead { display:table-header-group; } th { padding:7px 6px; color:#fff; background:#1C4169; text-align:left; font-size:8px; } td { padding:6px; border-bottom:1px solid #E4E7EC; vertical-align:top; overflow-wrap:anywhere; font-size:8px; } tbody tr:nth-child(even) td { background:#F8FAFC; } tr { break-inside:avoid; }
-    .nota { padding:10px 12px; border-left:4px solid #F08C28; background:#FFF7ED; color:#7C4A16; } .detalle { font-size:8px; } .detalle h2 { margin-top:8px; }
+    table { width:100%; border-collapse:collapse; margin:7px 0 14px; table-layout:fixed; } thead { display:table-header-group; } th { padding:7px 6px; color:#fff; background:#1C4169; text-align:left; font-size:10px; } td { padding:6px; border-bottom:1px solid #E4E7EC; vertical-align:top; overflow-wrap:anywhere; font-size:10px; } tbody tr:nth-child(even) td { background:#F8FAFC; } tr { break-inside:avoid; }
+    .nota { padding:10px 12px; border-left:4px solid #F08C28; background:#FFF7ED; color:#7C4A16; } .detalle { font-size:10px; } .detalle h2 { margin-top:8px; }
     @media screen { body { max-width:1120px; margin:auto; padding:18px; background:#eef2f6; } .portada,.pagina { margin:0 auto 18px; padding:28px; background-color:#fff; box-shadow:0 8px 28px rgba(28,65,105,.14); } }
-  </style></head><body>
-    <section class="portada"><img class="portada-logo" src="${excelValor(logoColegio)}" alt="Logo del Colegio Americano de Bogotá Bilingüe"><div><div class="marca">Colegio Americano de Bogotá Bilingüe</div><h1>Reporte ejecutivo de analítica</h1><p class="subtitulo">Dos líneas independientes de análisis para comprender la demanda del servicio y la experiencia de sus usuarios.</p><div class="ejes-portada"><span class="eje-chip requests">01 · Solicitudes</span><span class="eje-chip feedback">02 · Retroalimentación</span></div><p class="fecha">Fecha de generación: ${excelValor(fechaReporte)}</p></div></section>
-    <section class="pagina"><div class="capitulo requests"><span class="capitulo-numero">01</span><div><h1>Solicitudes (Requests)</h1><p>Análisis operativo de la demanda, frecuencia y distribución de las reservas.</p></div></div><div class="definicion"><article><strong>¿Qué se analiza?</strong>Volumen de solicitudes, usuarios, secciones, asignaturas, cursos o lugares y comportamiento mensual.</article><article><strong>¿Para qué sirve?</strong>Permite planear capacidad, identificar concentración de demanda y anticipar necesidades operativas.</article></div><div class="kpis">${tarjeta("Solicitudes históricas", solicitudes.length)}${tarjeta("Solicitudes del periodo", informe?.total || 0, periodo)}${tarjeta("Usuarios únicos", informe?.profesores.size || 0, periodo)}${tarjeta("Sección principal", obtenerTopCategoria(porSeccion), periodo)}</div><p class="nota">Estos indicadores describen el uso del servicio. No representan satisfacción ni percepción de calidad.</p></section>
-    <section class="pagina"><div class="capitulo requests"><span class="capitulo-numero">01</span><div><h1>Solicitudes - análisis detallado</h1><p>Periodo destacado: ${excelValor(periodo)}</p></div></div><div class="grid"><div class="panel">${graficaBarrasExcel("Evolución mensual de solicitudes", porMes, "#F08C28")}</div><div class="panel">${graficaPieExcel("Distribución por sección", porSeccion, informe?.total || 0, coloresPdf)}</div><div class="panel">${graficaBarrasHorizontalesExcel("Solicitudes por asignatura", porAsignatura, "#1C4169")}</div><div class="panel">${graficaBarrasHorizontalesExcel("Solicitudes por curso o lugar", porCurso, "#475467")}</div><div class="panel">${graficaBarrasHorizontalesExcel("Solicitudes por profesor o usuario", porProfesor, "#F08C28")}</div></div></section>
-    <section class="pagina"><div class="capitulo feedback"><span class="capitulo-numero">02</span><div><h1>Retroalimentación (Feedback)</h1><p>Análisis de satisfacción, percepción de calidad y oportunidades de mejora.</p></div></div><div class="definicion"><article><strong>¿Qué se analiza?</strong>Calificaciones del proceso, atención de colaboradores, configuración de iPads y comentarios de los usuarios.</article><article><strong>¿Para qué sirve?</strong>Permite evaluar la experiencia del servicio y priorizar acciones concretas de mejora.</article></div><div class="kpis">${tarjeta("Respuestas recibidas", feedback.length)}${tarjeta("Promedio general", metricas.promedioGeneral ? `${metricas.promedioGeneral.toFixed(1)} / 5` : "Sin datos")}${tarjeta("Calificaciones positivas", feedback.length ? `${metricas.favorables}%` : "Sin datos")}${tarjeta("Oportunidad de mejora", metricas.debilidad || "Sin datos")}</div><p class="nota">Estos resultados reflejan percepción y satisfacción. No deben sumarse ni compararse directamente con el volumen de solicitudes.</p><div class="grid"><div class="panel">${graficaLineaFeedbackExcel(metricas.tendencia)}</div><div class="panel">${graficaPieExcel("Distribución general de calificaciones", distribucion, metricas.totalCalificaciones, coloresPdf)}</div></div>${tablaExcel("Resultados por pregunta", ["Pregunta", "Respuestas", "Promedio sobre 5"], metricas.metricas.map(item => [item.label, item.total, item.total ? item.promedio.toFixed(1) : ""]))}</section>
-    <section class="pagina detalle"><h2>Anexo 1 · Detalle individual de solicitudes</h2>${tablaExcel("Solicitudes", ["Creación", "Fecha solicitada", "Hora", "Nombre", "Curso/lugar", "Aplicación", "Sección", "Asignatura", "iPads", "Correo", "Objetivo", "Estado"], filasSolicitudes)}</section>
-    <section class="pagina detalle"><h2>Anexo 2 · Detalle individual de retroalimentación</h2>${tablaExcel("Respuestas", ["Creación", "Correo", "Eficiencia", "Colaboradores", "Configuración de iPads", "Promedio", "Comentario"], filasFeedback)}</section>
-    <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),350));<\/script></body></html>`;
 
+    .comparativa-fila { margin:0 0 11px; break-inside:avoid; }
+    .comparativa-dato { display:flex; justify-content:space-between; gap:12px; margin-bottom:5px; font-size:11px; color:#1C4169; }
+    .comparativa-dato span { overflow-wrap:anywhere; min-width:0; } .comparativa-dato strong { flex-shrink:0; }
+    .comparativa-pista { height:7px; border-radius:4px; background:#eef3f8; overflow:hidden; }
+    .comparativa-pista span { display:block; height:100%; border-radius:4px; }
+    .pagina { min-height:172mm; } .pagina ul { margin:8px 0; padding-left:18px; line-height:1.7; font-size:12px; }
+    .panel h2 { font-size:15px; } .docentes td { font-size:12px; padding:9px 12px; } .docentes th { font-size:11px; }
+    .docentes th:last-child,.docentes td:last-child { width:95px; text-align:right; }
+    .destacado { padding:14px 18px; background:#eef4fa; border-left:5px solid #F08C28; color:#1C4169; font-size:15px; font-weight:700; }
+    .detalle td,.detalle th { font-size:8px; } .detalle { min-height:0; } .detalle table { table-layout:fixed; }
+    .nota { line-height:1.5; } .panel svg text { font-family:Arial,sans-serif; }
+  </style></head><body>${portada}${cuerpo}
+    <script>window.addEventListener('load', async () => { await document.fonts.ready; await Promise.all(Array.from(document.images, img => img.decode().catch(() => {}))); setTimeout(() => window.print(), 350); });<\/script></body></html>`;
   ventana.document.open();
   ventana.document.write(html);
   ventana.document.close();
-  status.textContent = "PDF report ready. Select “Save as PDF” in the print dialog.";
+  status.textContent = `${titulo} listo. Selecciona “Guardar como PDF” en el diálogo de impresión.`;
+  } catch (error) {
+    ventana.close();
+    status.textContent = error.message || "No se pudo preparar el informe.";
+  }
 }
 
 async function renderPanelFeedback() {
@@ -2790,7 +2996,8 @@ document.getElementById("adminOverlay").addEventListener("click", e => {
 document.getElementById("adminTabFeedback").addEventListener("click", () => cambiarAdminAnalyticsTab("feedback"));
 document.getElementById("adminTabRequests").addEventListener("click", () => cambiarAdminAnalyticsTab("requests"));
 document.getElementById("btnExportarAnalytics").addEventListener("click", exportarAnalyticsExcel);
-document.getElementById("btnExportarAnalyticsPdf").addEventListener("click", exportarAnalyticsPdf);
+document.getElementById("btnExportarAnalyticsPdf").addEventListener("click", () => exportarAnalyticsPdf());
+document.getElementById("btnExportarAnexoPdf").addEventListener("click", () => exportarAnalyticsPdf(true));
 document.getElementById("btnCerrarSolicitudesRecientes").addEventListener("click", cerrarSolicitudesRecientes);
 document.getElementById("recentRequestsOverlay").addEventListener("click", e => {
   if (e.target === document.getElementById("recentRequestsOverlay")) e.stopPropagation();
@@ -2843,3 +3050,43 @@ document.addEventListener("click", event => {
   renderMiniCalendar();
   await renderSemana();
 })();
+
+document.getElementById("sessionUserBadge").addEventListener("click", async () => {
+  if (!esSuperAdmin()) return;
+  cerrarMenuAdminMovil();
+  document.getElementById("etiquetasForm").reset();
+  document.getElementById("etiquetasStatus").textContent = "Cargando etiquetas...";
+  document.getElementById("etiquetasLista").replaceChildren();
+  document.getElementById("etiquetasModal").showModal();
+  try {
+    await cargarEtiquetas(); renderEtiquetas();
+    document.getElementById("etiquetasStatus").textContent = "";
+  } catch (error) { document.getElementById("etiquetasStatus").textContent = error.message; }
+});
+document.getElementById("btnCerrarEtiquetas").onclick = () => document.getElementById("etiquetasModal").close();
+document.getElementById("etiquetasForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const id = document.getElementById("etiquetaId").value;
+  modificarEtiqueta(id ? "PUT" : "POST", id, {
+    nombre: document.getElementById("etiquetaNombre").value.trim(),
+    color: document.getElementById("etiquetaColor").value
+  });
+});
+
+function actualizarPaletaEtiquetas() {
+  const color = document.getElementById("etiquetaColor").value.toLowerCase();
+  document.querySelectorAll("[data-etiqueta-color]").forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.etiquetaColor === color));
+  });
+}
+document.querySelectorAll("[data-etiqueta-color]").forEach(button => {
+  button.addEventListener("click", () => {
+    document.getElementById("etiquetaColor").value = button.dataset.etiquetaColor;
+    actualizarPaletaEtiquetas();
+  });
+});
+document.getElementById("etiquetaColor").addEventListener("input", actualizarPaletaEtiquetas);
+document.getElementById("etiquetasForm").addEventListener("reset", () => {
+  queueMicrotask(actualizarPaletaEtiquetas);
+});
+actualizarPaletaEtiquetas();

@@ -1,5 +1,5 @@
 {
-  "username": "admin",
+  "username": "superadmin",
   "passwordHash": "$2b$10$IW1IobwePGQhsY2xNoULUu730tBSGQk15Eob8FNtqci3bzpTxa3G2",
   "coordinators": [
     {
@@ -14,5 +14,9 @@
       "username": "primaria",
       "passwordHash": "$2b$10$wcLD3/XpbG6Oo.Fu64BTFOLdz7fxqKdEwsdjyiYBtzXUs1wZwk2xa"
     }
-  ]
+  ],
+  "adminAccount": {
+    "username": "admin",
+    "passwordHash": "$2b$10$IW1IobwePGQhsY2xNoULUu730tBSGQk15Eob8FNtqci3bzpTxa3G2"
+  }
 }

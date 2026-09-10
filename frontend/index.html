@@ -6,8 +6,8 @@
   <title>Calendario de Solicitudes - CABB</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="shortcut icon" href="Images/Mini_logo.png" shortcut icon>
-  <link rel="stylesheet" href="style.css?v=93">
+  <link rel="icon" type="image/png" href="Images/Mini_logo.png?v=2">
+  <link rel="stylesheet" href="style.css?v=101">
 </head>
 <body>
 
@@ -48,7 +48,7 @@
 
       <!-- PANEL ADMIN -->
       <div class="sidebar-session">
-        <div id="sessionUserBadge" class="session-user-badge" style="display:none;"></div>
+        <button id="sessionUserBadge" class="session-user-badge" type="button" style="display:none;" disabled></button>
         <div class="admin-panel">
           <button id="btnAdminMenu" class="admin-menu-toggle" type="button" aria-label="Abrir panel de opciones" aria-expanded="false" hidden>
             <span aria-hidden="true"></span>
@@ -57,7 +57,7 @@
           </button>
           <button id="btnPanelAdmin" style="display:none;">Analytics</button>
           <button id="btnSolicitudesRecientes" style="display:none;">Recent Requests</button>
-          <button id="btnAdmin"><span aria-hidden="true">👤</span> Login</button>
+          <button id="btnAdmin"><svg class="login-user-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg> Login</button>
           <button id="btnLogout" style="display:none;">Logout</button>
         </div>
       </div>
@@ -74,6 +74,42 @@
     </main>
 
   </div>
+
+  <dialog id="etiquetasModal" class="modal modal-etiquetas" aria-labelledby="etiquetasTitulo">
+    <button class="modal-close" id="btnCerrarEtiquetas" type="button" aria-label="Cerrar etiquetas">×</button>
+    <h3 class="modal-titulo" id="etiquetasTitulo">Etiquetas</h3>
+    <p class="modal-confirmacion-texto">Organiza las solicitudes por responsable.</p>
+    <form id="etiquetasForm">
+      <input id="etiquetaId" type="hidden" value="">
+      <div class="etiquetas-campos">
+        <div class="form-group">
+          <label for="etiquetaNombre">Nombre del responsable</label>
+          <input id="etiquetaNombre" required maxlength="60" placeholder="Ej. Alejandro">
+        </div>
+        <div class="form-group">
+          <label for="etiquetaColor">Color</label>
+          <input id="etiquetaColor" type="color" value="#526fa3">
+
+        </div>
+      </div>
+      <div class="etiquetas-paleta" role="group" aria-label="Paleta de colores">
+        <button class="etiqueta-muestra" type="button" data-etiqueta-color="#526fa3" style="--muestra-color:#526fa3" aria-label="Azul acero" title="Azul acero" aria-pressed="false"></button>
+        <button class="etiqueta-muestra" type="button" data-etiqueta-color="#6865a8" style="--muestra-color:#6865a8" aria-label="Índigo" title="Índigo" aria-pressed="false"></button>
+        <button class="etiqueta-muestra" type="button" data-etiqueta-color="#956b98" style="--muestra-color:#956b98" aria-label="Malva" title="Malva" aria-pressed="false"></button>
+        <button class="etiqueta-muestra" type="button" data-etiqueta-color="#b76f84" style="--muestra-color:#b76f84" aria-label="Rosa antiguo" title="Rosa antiguo" aria-pressed="false"></button>
+        <button class="etiqueta-muestra" type="button" data-etiqueta-color="#bc795f" style="--muestra-color:#bc795f" aria-label="Terracota" title="Terracota" aria-pressed="false"></button>
+        <button class="etiqueta-muestra" type="button" data-etiqueta-color="#ab8b46" style="--muestra-color:#ab8b46" aria-label="Ocre" title="Ocre" aria-pressed="false"></button>
+        <button class="etiqueta-muestra" type="button" data-etiqueta-color="#71917a" style="--muestra-color:#71917a" aria-label="Salvia" title="Salvia" aria-pressed="false"></button>
+        <button class="etiqueta-muestra" type="button" data-etiqueta-color="#4f8b8b" style="--muestra-color:#4f8b8b" aria-label="Petróleo" title="Petróleo" aria-pressed="false"></button>
+      </div>
+      <div class="modal-acciones">
+        <button class="btn-confirmar" type="submit">Guardar etiqueta</button>
+      </div>
+    </form>
+    <span class="reserva-admin-label">Etiquetas disponibles</span>
+    <div id="etiquetasLista" class="reserva-admin-list"></div>
+    <p id="etiquetasStatus" class="admin-status" role="status" aria-live="polite"></p>
+  </dialog>
 
   <!-- ANALYTICS DASHBOARD -->
   <div id="adminOverlay" class="admin-overlay" style="display:none;">
@@ -99,6 +135,7 @@
             </svg>
             <span>PDF</span>
           </button>
+          <button class="admin-export" id="btnExportarAnexoPdf" type="button" aria-label="Exportar anexo técnico en PDF">Anexo técnico</button>
           <button class="admin-close" id="btnCerrarPanelAdmin" type="button" aria-label="Close">x</button>
         </div>
       </header>
@@ -454,7 +491,6 @@
       <button class="modal-close" id="btnCerrarReservaAdmin" type="button">x</button>
       <span class="modal-kicker">Gestionar horario</span>
       <h3 class="modal-titulo" id="reservaAdminTitulo">Reserva</h3>
-      <p class="modal-confirmacion-texto" id="reservaAdminTexto"></p>
       <div class="reserva-admin-list" id="reservaAdminLista"></div>
       <p class="admin-status" id="reservaAdminStatus" aria-live="polite"></p>
       <div class="modal-acciones">
@@ -464,6 +500,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=79"></script>
+  <script src="app.js?v=92"></script>
 </body>
 </html>

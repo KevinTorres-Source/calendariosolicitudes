@@ -38,7 +38,8 @@ const RESERVAS_FILE = path.join(__dirname, "reservas.json");
 const BLOQUEOS_FILE = path.join(__dirname, "bloqueos.json");
 const FEEDBACK_FILE = path.join(__dirname, "feedback.json");
 const LIMITES_SOLICITUDES_FILE = path.join(__dirname, "limites-solicitudes.json");
-const COLORES_ETIQUETA = new Set(["", "azul", "amarillo", "naranja", "morado", "rojo"]);
+const ETIQUETAS_FILE = path.join(__dirname, "etiquetas.json");
+let etiquetas = fs.existsSync(ETIQUETAS_FILE) ? JSON.parse(fs.readFileSync(ETIQUETAS_FILE, "utf-8")) : [];
 const LIMITES_DISPOSITIVOS_FILE = path.join(__dirname, "limites-dispositivos.json");
 const ADMIN_CONFIG_FILE = path.join(__dirname, "admin-config.json");
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
@@ -191,6 +192,15 @@ try {
   fs.writeFileSync(ADMIN_CONFIG_FILE, JSON.stringify(adminConfig, null, 2));
 }
 
+// Migración idempotente: conservar el hash actual y crear el administrador operativo.
+if (adminConfig.username !== "superadmin" || !adminConfig.adminAccount) {
+  adminConfig.username = "superadmin";
+  adminConfig.adminAccount = adminConfig.adminAccount || {
+    username: "admin", passwordHash: adminConfig.passwordHash
+  };
+  fs.writeFileSync(ADMIN_CONFIG_FILE, JSON.stringify(adminConfig, null, 2));
+}
+
 function guardarReservas() {
   reservas = normalizarReservas(reservas);
   fs.writeFileSync(RESERVAS_FILE, JSON.stringify(reservas, null, 2));
@@ -212,10 +222,10 @@ function guardarLimitesDispositivos() {
   fs.writeFileSync(LIMITES_DISPOSITIVOS_FILE, JSON.stringify(limitesDispositivos, null, 2));
 }
 
-function validarAdmin(username, password) {
+function validarAdmin(username, password, cuenta = adminConfig) {
   const usuarioValido =
-    String(username || "").trim().toLowerCase() === String(adminConfig.username || "").trim().toLowerCase();
-  const passwordValido = bcrypt.compareSync(String(password || "").trim(), adminConfig.passwordHash || "");
+    String(username || "").trim().toLowerCase() === String(cuenta.username || "").trim().toLowerCase();
+  const passwordValido = bcrypt.compareSync(String(password || "").trim(), cuenta.passwordHash || "");
   return usuarioValido && passwordValido;
 }
 
@@ -258,6 +268,7 @@ function verificarTokenSesion(req) {
 
 function obtenerRolDesdeToken(req) {
   const sesion = verificarTokenSesion(req);
+  if (sesion?.rol === "superadmin") return "superadmin";
   if (sesion?.rol === "admin") return "admin";
   if (sesion?.rol === "coordinador") return "coordinador";
   return "profesor";
@@ -265,8 +276,15 @@ function obtenerRolDesdeToken(req) {
 
 function requerirAdmin(req, res, next) {
   const sesion = verificarTokenSesion(req);
-  if (sesion?.rol !== "admin") {
+  if (!["superadmin", "admin"].includes(sesion?.rol)) {
     return res.status(401).json({ error: "No autorizado" });
+  }
+  next();
+}
+
+function requerirSuperAdmin(req, res, next) {
+  if (obtenerRolDesdeToken(req) !== "superadmin") {
+    return res.status(403).json({ error: "Esta acción requiere SUPER ADMIN." });
   }
   next();
 }
@@ -579,7 +597,7 @@ function validarSolicitudReserva(solicitud, rol = "profesor") {
     return { error: "La sección seleccionada no es válida" };
   }
 
-  if (!["admin", "coordinador"].includes(rol) && !estaEnVentanaReservaProfesor(fecha)) {
+  if (!["superadmin", "admin", "coordinador"].includes(rol) && !estaEnVentanaReservaProfesor(fecha)) {
     return { error: "Solo puedes agendar con 2 días de antelación hasta el final de la semana siguiente." };
   }
 
@@ -696,9 +714,54 @@ app.get("/config", (req, res) => {
   });
 });
 
+function reservaVisible(req, reserva) {
+  const { etiquetaId, etiquetaColor, etiqueta, ...publica } = reserva;
+  if (!["superadmin", "admin", "coordinador"].includes(obtenerRolDesdeToken(req))) return publica;
+  const asignada = etiquetas.find(item => item.id === etiquetaId);
+  return asignada ? { ...publica, etiquetaId, etiqueta: asignada } : publica;
+}
+
+app.get("/etiquetas", (req, res) => {
+  if (!["superadmin", "admin", "coordinador"].includes(obtenerRolDesdeToken(req))) {
+    return res.status(403).json({ error: "No autorizado" });
+  }
+  res.json(etiquetas);
+});
+
+function guardarEtiqueta(req, res) {
+  const existente = req.params.id ? etiquetas.find(item => item.id === req.params.id) : null;
+  if (req.params.id && !existente) return res.status(404).json({ error: "Etiqueta no encontrada" });
+  const nombre = typeof req.body.nombre === "string" ? req.body.nombre.trim() : "";
+  const color = typeof req.body.color === "string" ? req.body.color.toLowerCase() : "";
+  if (!nombre || nombre.length > 60 || !/^#[0-9a-f]{6}$/.test(color)) {
+    return res.status(400).json({ error: "Indica un nombre de hasta 60 caracteres y un color válido." });
+  }
+  if (etiquetas.some(item => item.id !== existente?.id && item.nombre.toLocaleLowerCase() === nombre.toLocaleLowerCase())) {
+    return res.status(409).json({ error: "Ya existe una etiqueta con ese nombre." });
+  }
+  const etiqueta = { id: existente?.id || crypto.randomUUID(), nombre, color };
+  const siguientes = existente ? etiquetas.map(item => item.id === etiqueta.id ? etiqueta : item) : [...etiquetas, etiqueta];
+  fs.writeFileSync(ETIQUETAS_FILE, JSON.stringify(siguientes, null, 2));
+  etiquetas = siguientes;
+  res.status(existente ? 200 : 201).json(etiqueta);
+}
+app.post("/etiquetas", requerirSuperAdmin, guardarEtiqueta);
+app.put("/etiquetas/:id", requerirSuperAdmin, guardarEtiqueta);
+app.delete("/etiquetas/:id", requerirSuperAdmin, (req, res) => {
+  if (!etiquetas.some(item => item.id === req.params.id)) return res.status(404).json({ error: "Etiqueta no encontrada" });
+  const siguientes = etiquetas.filter(item => item.id !== req.params.id);
+  fs.writeFileSync(ETIQUETAS_FILE, JSON.stringify(siguientes, null, 2));
+  etiquetas = siguientes;
+  reservas.forEach(reserva => {
+    if (reserva.etiquetaId === req.params.id) delete reserva.etiquetaId;
+  });
+  guardarReservas();
+  res.json({ message: "Etiqueta eliminada" });
+});
+
 // GET reservas
 app.get("/reservas", (req, res) => {
-  res.json(normalizarReservas(reservas));
+  res.json(normalizarReservas(reservas).map(reserva => reservaVisible(req, reserva)));
 });
 
 // GET solicitudes recientes (solo admin)
@@ -712,7 +775,7 @@ app.get("/reservas/recientes", requerirAdmin, (req, res) => {
     })
     .slice(0, limite);
 
-  res.json(normalizarReservas(recientes));
+  res.json(normalizarReservas(recientes).map(reserva => reservaVisible(req, reserva)));
 });
 
 // POST validar reserva sin guardarla
@@ -736,7 +799,7 @@ app.post("/reservas", async (req, res) => {
   if (reservaDuplicada) {
     return res.json({
       message: "Reserva creada ✅",
-      reserva: reservaDuplicada,
+      reserva: reservaVisible(req, reservaDuplicada),
       duplicada: true,
       correo: { enviado: false, razon: "Solicitud duplicada; se reutilizo la reserva existente" }
     });
@@ -792,9 +855,15 @@ app.post("/reservas", async (req, res) => {
 // PUT cambiar estado de reserva (solo admin)
 app.put("/reservas/:id", requerirAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
-  const { estado, etiquetaColor } = req.body;
+  const { estado, etiquetaId } = req.body;
   const actualizaEstado = estado !== undefined;
-  const actualizaEtiqueta = etiquetaColor !== undefined;
+  const actualizaEtiqueta = etiquetaId !== undefined;
+  if (actualizaEtiqueta && obtenerRolDesdeToken(req) !== "superadmin") {
+    return res.status(403).json({ error: "Solo SUPER ADMIN puede asignar o quitar etiquetas." });
+  }
+  if (actualizaEstado && obtenerRolDesdeToken(req) !== "superadmin") {
+    return res.status(403).json({ error: "Solo SUPER ADMIN puede cambiar el estado de solicitudes." });
+  }
 
   const reserva = reservas.find(r => r.id === id);
 
@@ -810,9 +879,8 @@ app.put("/reservas/:id", requerirAdmin, async (req, res) => {
     return res.status(400).json({ error: "Estado inválido" });
   }
 
-  const colorNormalizado = String(etiquetaColor || "").trim().toLowerCase();
-  if (actualizaEtiqueta && !COLORES_ETIQUETA.has(colorNormalizado)) {
-    return res.status(400).json({ error: "Color de etiqueta inválido" });
+  if (actualizaEtiqueta && etiquetaId !== null && !etiquetas.some(item => item.id === etiquetaId)) {
+    return res.status(400).json({ error: "Etiqueta inválida" });
   }
 
   if (actualizaEstado && estado === "aprobado") {
@@ -825,8 +893,9 @@ app.put("/reservas/:id", requerirAdmin, async (req, res) => {
   const estadoAnterior = reserva.estado;
   if (actualizaEstado) reserva.estado = estado;
   if (actualizaEtiqueta) {
-    if (colorNormalizado) reserva.etiquetaColor = colorNormalizado;
-    else delete reserva.etiquetaColor;
+    if (etiquetaId) reserva.etiquetaId = etiquetaId;
+    else delete reserva.etiquetaId;
+    delete reserva.etiquetaColor;
   }
   guardarReservas();
   let correoResultado = { enviado: false, razon: "No se intento enviar" };
@@ -844,7 +913,7 @@ app.put("/reservas/:id", requerirAdmin, async (req, res) => {
 });
 
 // DELETE eliminar reserva (solo admin)
-app.delete("/reservas/:id", requerirAdmin, (req, res) => {
+app.delete("/reservas/:id", requerirSuperAdmin, (req, res) => {
   const id = parseInt(req.params.id);
   const index = reservas.findIndex(r => r.id === id);
 
@@ -874,7 +943,7 @@ app.get("/limites-dispositivos", (req, res) => {
 });
 
 // PUT limite diario de solicitudes por horario (solo admin)
-app.put("/limites-solicitudes/:fecha", requerirAdmin, (req, res) => {
+app.put("/limites-solicitudes/:fecha", requerirSuperAdmin, (req, res) => {
   const fecha = req.params.fecha;
   const limite = parseInt(req.body?.limite, 10);
 
@@ -898,7 +967,7 @@ app.put("/limites-solicitudes/:fecha", requerirAdmin, (req, res) => {
 });
 
 // DELETE restablecer limite diario (solo admin)
-app.delete("/limites-solicitudes/:fecha", requerirAdmin, (req, res) => {
+app.delete("/limites-solicitudes/:fecha", requerirSuperAdmin, (req, res) => {
   const fecha = req.params.fecha;
   limitesSolicitudes = limitesSolicitudes.filter(item => item.fecha !== fecha);
   guardarLimitesSolicitudes();
@@ -906,7 +975,7 @@ app.delete("/limites-solicitudes/:fecha", requerirAdmin, (req, res) => {
 });
 
 // PUT limite diario de dispositivos (solo admin)
-app.put("/limites-dispositivos/:fecha", requerirAdmin, (req, res) => {
+app.put("/limites-dispositivos/:fecha", requerirSuperAdmin, (req, res) => {
   const fecha = req.params.fecha;
   const limite = parseInt(req.body?.limite, 10);
 
@@ -930,7 +999,7 @@ app.put("/limites-dispositivos/:fecha", requerirAdmin, (req, res) => {
 });
 
 // DELETE restablecer limite diario de dispositivos (solo admin)
-app.delete("/limites-dispositivos/:fecha", requerirAdmin, (req, res) => {
+app.delete("/limites-dispositivos/:fecha", requerirSuperAdmin, (req, res) => {
   const fecha = req.params.fecha;
   limitesDispositivos = limitesDispositivos.filter(item => item.fecha !== fecha);
   guardarLimitesDispositivos();
@@ -972,7 +1041,7 @@ app.post("/feedback", (req, res) => {
 });
 
 // POST bloquear horario (solo admin)
-app.post("/bloqueos", requerirAdmin, (req, res) => {
+app.post("/bloqueos", requerirSuperAdmin, (req, res) => {
   const { fecha, hour } = req.body;
 
   if (!fecha) {
@@ -998,7 +1067,7 @@ app.post("/bloqueos", requerirAdmin, (req, res) => {
 });
 
 // DELETE desbloquear horario (solo admin)
-app.delete("/bloqueos/:id", requerirAdmin, (req, res) => {
+app.delete("/bloqueos/:id", requerirSuperAdmin, (req, res) => {
   const id = parseInt(req.params.id);
   const index = bloqueos.findIndex(b => b.id === id);
 
@@ -1021,12 +1090,14 @@ app.post("/login", (req, res) => {
     return res.status(429).json({ error: "Demasiados intentos. Intenta de nuevo más tarde." });
   }
 
-  if (validarAdmin(username, password)) {
+  const rolAdmin = validarAdmin(username, password) ? "superadmin"
+    : validarAdmin(username, password, adminConfig.adminAccount) ? "admin" : null;
+  if (rolAdmin) {
     limpiarIntentosLogin(req, username);
     return res.json({
-      token: crearTokenSesion({ rol: "admin", usuario: adminConfig.username || "admin" }),
-      rol: "admin",
-      usuario: adminConfig.username || "admin"
+      token: crearTokenSesion({ rol: rolAdmin, usuario }),
+      rol: rolAdmin,
+      usuario
     });
   }
 

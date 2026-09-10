@@ -28,7 +28,7 @@ function entrarConRol(token, rol, usuario) {
   localStorage.setItem("token", token);
   localStorage.setItem("rol", rol);
   localStorage.setItem("usuarioSesion", usuario);
-  localStorage.setItem("modoAdmin", rol === "admin" ? "true" : "false");
+  localStorage.setItem("modoAdmin", ["superadmin", "admin"].includes(rol) ? "true" : "false");
   window.location.assign("index.html");
 }
 
@@ -62,7 +62,7 @@ document.getElementById("loginForm").addEventListener("submit", async event => {
       return;
     }
 
-    entrarConRol(data.token, data.rol || "admin", data.usuario || usuario);
+    entrarConRol(data.token, data.rol || "profesor", data.usuario || usuario);
   } catch {
     status.textContent = "No se pudo conectar con el servidor.";
     submit.disabled = false;

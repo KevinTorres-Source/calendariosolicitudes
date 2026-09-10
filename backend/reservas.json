@@ -18,7 +18,8 @@
     "cantidad": 30,
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Prueba de correo",
-    "estado": "rechazado"
+    "estado": "rechazado",
+    "objetivoUso": "Prueba de correo"
   },
   {
     "id": 1780345051320,
@@ -31,7 +32,8 @@
     "cantidad": 10,
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Prueba correo 2",
-    "estado": "rechazado"
+    "estado": "rechazado",
+    "objetivoUso": "Prueba correo 2"
   },
   {
     "id": 1780345981526,
@@ -44,7 +46,8 @@
     "cantidad": 10,
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Prueba 3",
-    "estado": "rechazado"
+    "estado": "rechazado",
+    "objetivoUso": "Prueba 3"
   },
   {
     "id": 1780345983537,
@@ -57,7 +60,8 @@
     "cantidad": 10,
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Prueba 3",
-    "estado": "rechazado"
+    "estado": "rechazado",
+    "objetivoUso": "Prueba 3"
   },
   {
     "id": 1780348645047,
@@ -70,7 +74,8 @@
     "cantidad": 1,
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Prueba 4",
-    "estado": "rechazado"
+    "estado": "rechazado",
+    "objetivoUso": "Prueba 4"
   },
   {
     "id": 1780348646670,
@@ -83,7 +88,8 @@
     "cantidad": 1,
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Prueba 4",
-    "estado": "rechazado"
+    "estado": "rechazado",
+    "objetivoUso": "Prueba 4"
   },
   {
     "id": 1780414592397,
@@ -97,7 +103,8 @@
     "cantidad": 32,
     "correo": "desarrolloinformatico@colamericano.edu.co",
     "nota": "PLENO math",
-    "estado": "rechazado"
+    "estado": "rechazado",
+    "objetivoUso": "PLENO math"
   },
   {
     "id": 1781098929822,
@@ -113,7 +120,8 @@
     "nota": "Prueba",
     "estado": "aprobado",
     "origenSolicitud": "usuario-interno",
-    "usuarioOrigen": "primaria"
+    "usuarioOrigen": "primaria",
+    "objetivoUso": "Prueba"
   },
   {
     "id": 1781100355670,
@@ -129,7 +137,8 @@
     "nota": "prueba secundaria",
     "estado": "aprobado",
     "origenSolicitud": "usuario-interno",
-    "usuarioOrigen": "secundaria"
+    "usuarioOrigen": "secundaria",
+    "objetivoUso": "prueba secundaria"
   },
   {
     "id": 1781100429630,
@@ -145,7 +154,8 @@
     "nota": "Preescolar ejemplo",
     "estado": "aprobado",
     "origenSolicitud": "usuario-interno",
-    "usuarioOrigen": "preescolar"
+    "usuarioOrigen": "preescolar",
+    "objetivoUso": "Preescolar ejemplo"
   },
   {
     "id": 1781198366352,
@@ -159,7 +169,8 @@
     "cantidad": 21,
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Prueba",
-    "estado": "rechazado"
+    "estado": "rechazado",
+    "objetivoUso": "Prueba"
   },
   {
     "id": 1782233137005,
@@ -173,6 +184,49 @@
     "cantidad": 20,
     "correo": "kevin.torres@colamericano.edu.co",
     "nota": "Evaluación semanal",
-    "estado": "rechazado"
+    "estado": "rechazado",
+    "objetivoUso": "Evaluación semanal"
+  },
+  {
+    "id": 1788998419297,
+    "creadoEn": "2026-09-10T00:00:19.297Z",
+    "clientRequestId": "173cfb20-9a2e-46a2-97ba-c75a3035e1a1",
+    "fecha": "2026-09-11",
+    "hour": "07:15-08:00",
+    "equipo": "23 iPads · 303",
+    "usuario": "Kevin EJEMPLO",
+    "curso": "303",
+    "aplicacion": "Canva",
+    "seccion": "Sección Preescolar y 1º",
+    "asignatura": "Física",
+    "materia": "Física",
+    "subject": "Física",
+    "cantidad": 23,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "objetivoUso": "Evaluación",
+    "nota": "Evaluación",
+    "estado": "rechazado",
+    "etiquetaId": "dcd4ccd6-b9b4-4750-99fa-5ece507dc31c"
+  },
+  {
+    "id": 1788999760814,
+    "creadoEn": "2026-09-10T00:22:40.814Z",
+    "clientRequestId": "1e7a933d-db65-442e-bc3f-9422575e8a95",
+    "fecha": "2026-09-11",
+    "hour": "07:15-08:00",
+    "equipo": "22 iPads · 202",
+    "usuario": "JOSE Ejemplo",
+    "curso": "202",
+    "aplicacion": "Canva",
+    "seccion": "Sección Preescolar y 1º",
+    "asignatura": "Física",
+    "materia": "Física",
+    "subject": "Física",
+    "cantidad": 22,
+    "correo": "kevin.torres@colamericano.edu.co",
+    "objetivoUso": "pleno",
+    "nota": "pleno",
+    "estado": "aprobado",
+    "etiquetaId": "0236e1c1-f47b-4e90-b333-393f3d6a8d5c"
   }
 ]
